@@ -24,6 +24,57 @@ const CORRECTIONS_HEADERS = [
   'id', 'item_id', 'item_type', 'filter_reason', 'feedback', 'date',
 ];
 
+const SHEET_HEADERS = {
+  'Opportunities': OPPORTUNITIES_HEADERS,
+  'Leads': LEADS_HEADERS,
+  'Corrections Log': CORRECTIONS_HEADERS,
+};
+
+/**
+ * Ensures row 1 of the given sheet contains the expected header row.
+ * Writes headers if row 1 is empty or does not start with the correct first header.
+ * Safe to call repeatedly — it is a no-op when headers are already present.
+ *
+ * @param {'Opportunities'|'Leads'|'Corrections Log'} sheetName
+ */
+async function initializeHeaders(sheetName) {
+  const headers = SHEET_HEADERS[sheetName];
+  if (!headers) {
+    throw new Error(`Unknown sheet name: ${sheetName}`);
+  }
+
+  const sheets = await getSheetsClient();
+  const spreadsheetId = getSpreadsheetId();
+
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range: `${sheetName}!A1:${columnLetter(headers.length - 1)}1`,
+  });
+
+  const existingRow = (res.data.values || [])[0] || [];
+
+  // Headers are present when the first cell matches the expected first header
+  if (existingRow[0] === headers[0]) {
+    return;
+  }
+
+  await sheets.spreadsheets.values.update({
+    spreadsheetId,
+    range: `${sheetName}!A1`,
+    valueInputOption: 'RAW',
+    requestBody: { values: [headers] },
+  });
+}
+
+/**
+ * Ensures all three sheets (Opportunities, Leads, Corrections Log) have their
+ * header rows written.  Call once before any append or read operations on a
+ * freshly-created spreadsheet.
+ */
+async function initializeAllHeaders() {
+  await Promise.all(Object.keys(SHEET_HEADERS).map((name) => initializeHeaders(name)));
+}
+
 /**
  * Appends a single opportunity row to the Opportunities sheet.
  *
@@ -211,6 +262,8 @@ module.exports = {
   appendLead,
   appendCorrection,
   updateStatus,
+  initializeHeaders,
+  initializeAllHeaders,
   OPPORTUNITIES_HEADERS,
   LEADS_HEADERS,
   CORRECTIONS_HEADERS,

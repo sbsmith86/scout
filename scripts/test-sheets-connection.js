@@ -43,7 +43,7 @@ if (fs.existsSync(envFile)) {
 }
 
 const { getSheetsClient, getSpreadsheetId } = require('../src/sheets/client');
-const { appendOpportunity, appendLead, appendCorrection } = require('../src/sheets/write');
+const { appendOpportunity, appendLead, appendCorrection, initializeAllHeaders } = require('../src/sheets/write');
 const { readOpportunities, readLeads, readCorrections } = require('../src/sheets/read');
 
 const TEST_ID_OPP = `test-opp-${Date.now()}`;
@@ -133,8 +133,18 @@ async function run() {
     process.exit(1);
   }
 
-  // ── 3. Write test rows ──────────────────────────────────────────────────────
-  console.log('\n3. Writing test rows…');
+  // ── 3. Initialize header rows ───────────────────────────────────────────────
+  console.log('\n3. Initializing header rows…');
+  try {
+    await initializeAllHeaders();
+    pass('initializeAllHeaders() completed — all three sheets have headers');
+  } catch (err) {
+    fail(`initializeAllHeaders() threw: ${err.message}`);
+    process.exit(1);
+  }
+
+  // ── 4. Write test rows ──────────────────────────────────────────────────────
+  console.log('\n4. Writing test rows…');
   try {
     await appendOpportunity({
       id: TEST_ID_OPP,
@@ -179,8 +189,8 @@ async function run() {
     fail(`appendCorrection() threw: ${err.message}`);
   }
 
-  // ── 4. Read back and verify ─────────────────────────────────────────────────
-  console.log('\n4. Reading back and verifying…');
+  // ── 5. Read back and verify ─────────────────────────────────────────────────
+  console.log('\n5. Reading back and verifying…');
   try {
     const opps = await readOpportunities();
     const found = opps.find((o) => o.id === TEST_ID_OPP);
@@ -217,8 +227,8 @@ async function run() {
     fail(`readCorrections() threw: ${err.message}`);
   }
 
-  // ── 5. Cleanup ──────────────────────────────────────────────────────────────
-  console.log('\n5. Cleaning up test rows…');
+  // ── 6. Cleanup ──────────────────────────────────────────────────────────────
+  console.log('\n6. Cleaning up test rows…');
   for (const [sheetName, testId] of [
     ['Opportunities', TEST_ID_OPP],
     ['Leads', TEST_ID_LEAD],
