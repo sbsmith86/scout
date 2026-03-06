@@ -1,0 +1,30 @@
+{
+  "name": "scout",
+  "version": "0.1.0",
+  "description": "Scout — automated business development pipeline for HosTechnology",
+  "main": "src/index.js",
+  "bin": {
+    "scout": "src/index.js"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "lint": "eslint src/**/*.js"
+  },
+  "keywords": [
+    "scout",
+    "hostechnology",
+    "business-development",
+    "nonprofit",
+    "automation"
+  ],
+  "author": "HosTechnology",
+  "license": "UNLICENSED",
+  "private": true,
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "eslint": "^8.57.0"
+  }
+}

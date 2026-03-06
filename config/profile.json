@@ -1,0 +1,25 @@
+{
+  "practice_name": "HosTechnology",
+  "tagline": "We help nonprofits and grassroots organizations automate the rest — so your team can focus on what only humans can do.",
+  "focus_areas": [],
+  "target_sectors": [],
+  "excluded_sectors": [],
+  "technical_skills": [
+    { "skill": "", "proficiency": "expert|strong|familiar" }
+  ],
+  "work_types": [],
+  "platforms": [],
+  "past_work": [
+    {
+      "org": "",
+      "what_built": "",
+      "outcome": "",
+      "sector": "",
+      "year": 0
+    }
+  ],
+  "rate_range": { "min": 0, "max": 0 },
+  "min_project_days": 30,
+  "geographic_scope": "remote_only",
+  "capacity": "available"
+}
