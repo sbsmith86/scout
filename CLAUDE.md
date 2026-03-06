@@ -148,7 +148,9 @@ The profile is a structured JSON file that anchors both the scorer and the draft
       "what_built": "",
       "outcome": "",        // MUST be measurable: '85-90% QA accuracy, reduced manual review by X hrs'
       "sector": "",
-      "year": 0
+      "year": 0,
+      "nda": false,         // true if covered by NDA — scorer uses full details, drafter uses public_description
+      "public_description": ""  // optional — anonymized version safe for outreach. Required if nda: true
     }
   ],
   "rate_range": { "min": 0, "max": 0 },
@@ -248,6 +250,8 @@ Runs alongside contact resolution for Contract Finder items. Appended to dashboa
 - Structured application with questions → each question extracted and answered individually — exported doc is a complete structured application draft
 - LOI required → shorter LOI draft; full proposal reserved for after LOI accepted
 - Funding Monitor lead → short warm outreach message, mentions specific funding received, proposes one concrete thing HosTechnology could help with
+
+**NDA-protected past work**: Some `past_work` entries have `"nda": true`. The **scorer** uses full details (org, what_built, outcome) for accurate scoring. The **drafter** must ONLY use the `public_description` field when referencing NDA work in outreach or proposals. Never reveal the org name or proprietary details in any client-facing draft.
 
 ---
 
