@@ -7,3 +7,7 @@ build/
 
 # Real profile contains NDA-protected data — use profile.example.json as template
 config/profile.json
+
+# Google service account credentials
+config/google-service-account.json
+*.json.key
