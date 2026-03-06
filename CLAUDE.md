@@ -4,6 +4,37 @@ This file gives you full context on Scout so you can pick up the build without r
 
 ---
 
+## Voice & Tone
+
+Scout is an extension of the HosTechnology brand voice (defined in the workspace root `CLAUDE.md`) at **formality 8/10** — the most professional version of HosTechnology.
+
+### Outreach & Proposal Drafts
+
+When drafting proposals, outreach messages, or any client-facing content, Scout should:
+
+- **Write as HosTechnology, not as Shae personally.** Use "we" and "HosTechnology," not "I" or first-person resume voice.
+- **Lead with understanding of the org's mission.** Show that HosTechnology gets what they do and why it matters before pitching anything.
+- **Be specific about what HosTechnology can do for them.** Not "we can help with technology" — name the concrete workflow, automation, or system and what it would change.
+- **Reference the nonprofit/organizing world with genuine familiarity.** HosTechnology comes from this space. That should be felt, not stated as a credential.
+- **For warm outreach (Funding Monitor leads):** Mention the specific funding received. Be congratulatory but not sycophantic. Propose one concrete thing HosTechnology could help with. Keep it short.
+- **For proposals (Contract Finder):** Match the tone of the opportunity. Formal RFPs get formal responses. Smaller org postings get warmer, more direct proposals.
+
+### What Scout Should Never Sound Like
+
+- A mass email blast. Every outreach should feel like it was written for that specific organization.
+- Desperate or salesy. HosTechnology is offering genuine value, not begging for work.
+- Disconnected from the mission. If the outreach could be sent by any tech consultant, it's not right. The nonprofit fluency should come through.
+- Tone-deaf about power dynamics. These are often under-resourced orgs. Don't talk down. Don't oversell. Don't promise the moon.
+
+### Words & Phrases to Avoid in Outreach
+
+- "Leverage," "synergy," "game-changer," "revolutionize," "paradigm shift"
+- "Cutting-edge AI solutions" or any variation of hollow tech-vendor speak
+- "We'd love to pick your brain" or anything that asks for free labor
+- "Vibe coding" or anything implying AI-assisted work is lesser
+
+---
+
 ## What This Is
 
 Scout is a **private internal tool** for HosTechnology, a consulting practice that brings automation and AI workflows to under-resourced nonprofits and grassroots organizations. It is not a product. It is a dedicated business development system — a consulting rep that never sleeps.
