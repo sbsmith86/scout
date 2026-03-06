@@ -23,7 +23,9 @@
   "engines": {
     "node": ">=18.0.0"
   },
-  "dependencies": {},
+  "dependencies": {
+    "googleapis": "^171.4.0"
+  },
   "devDependencies": {
     "eslint": "^8.57.0"
   }
