@@ -174,7 +174,7 @@ function buildHtml(summary, surfacedItems, runDate) {
           <!-- CTA -->
           <tr>
             <td style="padding:0 32px 32px;">
-              <a href="${DASHBOARD_URL}"
+              <a href="${safeDashboardUrl(DASHBOARD_URL)}"
                  style="display:inline-block;padding:12px 24px;background:#111827;color:#ffffff;text-decoration:none;border-radius:6px;font-size:14px;font-weight:600;">
                 Review in Dashboard →
               </a>
@@ -196,6 +196,27 @@ function buildHtml(summary, surfacedItems, runDate) {
   </table>
 </body>
 </html>`;
+}
+
+// ── URL validation ────────────────────────────────────────────────────────────
+
+/**
+ * Return a safe, HTML-escaped dashboard URL for use in an href attribute.
+ * Validates that the URL uses http or https — falls back to '#' if not.
+ *
+ * @param {string} url
+ * @returns {string}
+ */
+function safeDashboardUrl(url) {
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return '#';
+    }
+  } catch (_) {
+    return '#';
+  }
+  return escapeHtml(url);
 }
 
 // ── HTML escape ───────────────────────────────────────────────────────────────
@@ -241,7 +262,7 @@ async function sendRunSummaryEmail(summary, surfacedItems = []) {
   }
 
   const surfacedCount = summary.surfaced ?? 0;
-  const subject = `Scout Run Complete — ${surfacedCount} ${surfacedCount === 1 ? 'opportunity' : 'opportunities'} surfaced`;
+  const subject = `Scout Run Complete — ${surfacedCount} opportunities surfaced`;
   const runDate = new Date();
   const html = buildHtml(summary, surfacedItems, runDate);
 
@@ -264,4 +285,4 @@ async function sendRunSummaryEmail(summary, surfacedItems = []) {
   }
 }
 
-module.exports = { sendRunSummaryEmail, buildHtml, escapeHtml };
+module.exports = { sendRunSummaryEmail, buildHtml, escapeHtml, safeDashboardUrl };
