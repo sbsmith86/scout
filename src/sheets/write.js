@@ -7,7 +7,7 @@ const { columnLetter } = require('./utils');
 
 const OPPORTUNITIES_HEADERS = [
   'id', 'source', 'title', 'org', 'url', 'deadline', 'budget',
-  'score', 'confidence',
+  'score', 'confidence', 'surface_reason', 'description',
   'contact_name', 'contact_title', 'contact_email', 'contact_linkedin',
   'application_type', 'application_notes',
   'status', 'date_surfaced', 'draft_doc_link',
@@ -15,13 +15,13 @@ const OPPORTUNITIES_HEADERS = [
 
 const LEADS_HEADERS = [
   'id', 'org', 'funder', 'funding_amount', 'funding_date', 'mission_summary',
-  'score', 'confidence',
+  'score', 'confidence', 'surface_reason',
   'contact_name', 'contact_title', 'contact_email', 'contact_linkedin',
   'status', 'date_surfaced', 'draft_doc_link',
 ];
 
 const CORRECTIONS_HEADERS = [
-  'id', 'item_id', 'item_type', 'filter_reason', 'feedback', 'date',
+  'id', 'item_id', 'item_type', 'title', 'org', 'source', 'filter_reason', 'feedback', 'date',
 ];
 
 const SHEET_HEADERS = {
@@ -88,6 +88,8 @@ async function initializeAllHeaders() {
  * @param {string|null} opportunity.budget          Raw text or null
  * @param {number} opportunity.score                Overall score (1–20)
  * @param {string} opportunity.confidence           'high' | 'medium' | 'low'
+ * @param {string} [opportunity.surface_reason]     One-line reason surfaced by scorer
+ * @param {string} [opportunity.description]        Truncated opportunity description
  * @param {string} opportunity.contact_name
  * @param {string} opportunity.contact_title
  * @param {string} opportunity.contact_email
@@ -112,6 +114,8 @@ async function appendOpportunity(opportunity) {
     opportunity.budget ?? '',
     opportunity.score ?? '',
     opportunity.confidence ?? '',
+    opportunity.surface_reason ?? '',
+    opportunity.description ?? '',
     opportunity.contact_name ?? '',
     opportunity.contact_title ?? '',
     opportunity.contact_email ?? '',
@@ -125,7 +129,7 @@ async function appendOpportunity(opportunity) {
 
   await sheets.spreadsheets.values.append({
     spreadsheetId,
-    range: 'Opportunities!A:R',
+    range: 'Opportunities!A:T',
     valueInputOption: 'RAW',
     insertDataOption: 'INSERT_ROWS',
     requestBody: { values: [row] },
@@ -144,6 +148,7 @@ async function appendOpportunity(opportunity) {
  * @param {string} lead.mission_summary
  * @param {number} lead.score                       Overall score (1–20)
  * @param {string} lead.confidence                  'high' | 'medium' | 'low'
+ * @param {string} [lead.surface_reason]            One-line reason surfaced by scorer
  * @param {string} lead.contact_name
  * @param {string} lead.contact_title
  * @param {string} lead.contact_email
@@ -165,6 +170,7 @@ async function appendLead(lead) {
     lead.mission_summary ?? '',
     lead.score ?? '',
     lead.confidence ?? '',
+    lead.surface_reason ?? '',
     lead.contact_name ?? '',
     lead.contact_title ?? '',
     lead.contact_email ?? '',
@@ -176,7 +182,7 @@ async function appendLead(lead) {
 
   await sheets.spreadsheets.values.append({
     spreadsheetId,
-    range: 'Leads!A:O',
+    range: 'Leads!A:P',
     valueInputOption: 'RAW',
     insertDataOption: 'INSERT_ROWS',
     requestBody: { values: [row] },
@@ -190,6 +196,9 @@ async function appendLead(lead) {
  * @param {string} correction.id
  * @param {string} correction.item_id
  * @param {string} correction.item_type             'opportunity' | 'lead'
+ * @param {string} [correction.title]               Title of the filtered item
+ * @param {string} [correction.org]                 Org name of the filtered item
+ * @param {string} [correction.source]              Source of the filtered item
  * @param {string} correction.filter_reason         Plain-English reason the item was filtered
  * @param {string} correction.feedback              'good_filter' | 'bad_filter'
  * @param {string} [correction.date]                ISO timestamp; defaults to now
@@ -202,6 +211,9 @@ async function appendCorrection(correction) {
     correction.id ?? '',
     correction.item_id ?? '',
     correction.item_type ?? '',
+    correction.title ?? '',
+    correction.org ?? '',
+    correction.source ?? '',
     correction.filter_reason ?? '',
     correction.feedback ?? '',
     correction.date ?? new Date().toISOString(),
@@ -209,7 +221,7 @@ async function appendCorrection(correction) {
 
   await sheets.spreadsheets.values.append({
     spreadsheetId,
-    range: 'Corrections Log!A:F',
+    range: 'Corrections Log!A:I',
     valueInputOption: 'RAW',
     insertDataOption: 'INSERT_ROWS',
     requestBody: { values: [row] },
