@@ -8,7 +8,8 @@
   },
   "scripts": {
     "start": "node src/index.js",
-    "lint": "eslint src/**/*.js"
+    "lint": "eslint src/**/*.js",
+    "test:sheets": "node scripts/test-sheets-connection.js"
   },
   "keywords": [
     "scout",
@@ -23,7 +24,9 @@
   "engines": {
     "node": ">=18.0.0"
   },
-  "dependencies": {},
+  "dependencies": {
+    "googleapis": "^171.4.0"
+  },
   "devDependencies": {
     "eslint": "^8.57.0"
   }
