@@ -30,6 +30,7 @@ const {
   appendLead,
   appendCorrection,
 } = require('./sheets');
+const { sendRunSummaryEmail } = require('./notifications');
 
 const PROFILE_PATH = path.join(__dirname, '..', 'config', 'profile.json');
 
@@ -374,6 +375,10 @@ async function runPipeline(options = {}) {
   };
 
   printSummary(summary);
+
+  // ── 9. Send notification email ─────────────────────────────────────────────
+  await sendRunSummaryEmail(summary, surfacedItems);
+
   return summary;
 }
 
