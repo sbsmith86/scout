@@ -2,22 +2,28 @@
 
 'use strict';
 
+const { runPipeline } = require('./pipeline');
+
 const [, , command] = process.argv;
 
 async function main() {
   switch (command) {
-    case 'run':
-      console.log('scout run — not yet implemented');
+    case 'run': {
+      console.log('[scout] Starting full pipeline run...');
+      await runPipeline();
       break;
-    case 'fetch':
-      console.log('scout fetch — not yet implemented');
+    }
+    case 'fetch': {
+      console.log('[scout] Fetch-only run (no scoring, no Sheets write)...');
+      await runPipeline({ fetchOnly: true });
       break;
+    }
     default:
       console.log('Usage: scout <command>');
       console.log('');
       console.log('Commands:');
-      console.log('  run     Run the full pipeline (fetch, score, draft, notify)');
-      console.log('  fetch   Fetch opportunities and leads from all sources');
+      console.log('  run     Run the full pipeline (fetch, score, write to Sheets)');
+      console.log('  fetch   Fetch opportunities and leads from all sources (no scoring, no write)');
       break;
   }
 }
