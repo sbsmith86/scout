@@ -3,6 +3,7 @@
 'use strict';
 
 const { runPipeline } = require('./pipeline');
+const { startDashboard } = require('./dashboard');
 
 const [, , command] = process.argv;
 
@@ -18,12 +19,17 @@ async function main() {
       await runPipeline({ fetchOnly: true });
       break;
     }
+    case 'dashboard': {
+      startDashboard();
+      break;
+    }
     default:
       console.log('Usage: scout <command>');
       console.log('');
       console.log('Commands:');
-      console.log('  run     Run the full pipeline (fetch, score, write to Sheets)');
-      console.log('  fetch   Fetch opportunities and leads from all sources (no scoring, no write)');
+      console.log('  run        Run the full pipeline (fetch, score, write to Sheets)');
+      console.log('  fetch      Fetch opportunities and leads from all sources (no scoring, no write)');
+      console.log('  dashboard  Start the review dashboard (default port 3000)');
       break;
   }
 }

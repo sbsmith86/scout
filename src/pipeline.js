@@ -107,6 +107,8 @@ function buildOpportunityRecord(item, scoreResult) {
     budget: item.budget ?? '',
     score: scoreResult.overall,
     confidence: scoreResult.confidence,
+    surface_reason: scoreResult.surface_reason ?? '',
+    description: item.description ? item.description.slice(0, 500) : '',
     // Contact fields — populated by Phase 2 contact resolution.
     contact_name: '',
     contact_title: '',
@@ -138,6 +140,7 @@ function buildLeadRecord(item, scoreResult) {
     mission_summary: item.mission_summary ?? item.description ?? '',
     score: scoreResult.overall,
     confidence: scoreResult.confidence,
+    surface_reason: scoreResult.surface_reason ?? '',
     // Contact fields — populated by Phase 2 contact resolution.
     contact_name: '',
     contact_title: '',
@@ -343,6 +346,9 @@ async function runPipeline(options = {}) {
         id: corrId,
         item_id: item.id || '',
         item_type: item.type === 'lead' ? 'lead' : 'opportunity',
+        title: item.title || '',
+        org: item.org || '',
+        source: item.source || '',
         filter_reason,
         feedback: '',
         date: new Date().toISOString(),
