@@ -81,24 +81,32 @@ function disqualify(opportunity, profile) {
 
   // Only evaluate if the profile has a non-zero rate floor set.
   if (rateMin > 0 && opportunity.budget) {
-    const budgetNumbers = extractNumbers(String(opportunity.budget));
-    if (budgetNumbers.length > 0) {
-      // Use the highest number found — most likely to represent the contract
-      // ceiling rather than an hourly floor.
-      const maxBudgetValue = Math.max(...budgetNumbers);
+    const budgetStr = String(opportunity.budget);
 
-      if (maxBudgetValue < rateMin) {
-        return {
-          pass: false,
-          filter_reason: `Budget (${opportunity.budget}) appears to be below the minimum project value of $${rateMin.toLocaleString()}.`,
-        };
-      }
+    // Skip budget disqualification for hourly/daily rates — we cannot compare
+    // them to a project-total minimum without knowing the full scope.
+    const isHourlyOrDaily = /\/\s*(?:hr|hour|day|wk|week)|per\s+(?:hour|day|week)|hourly/i.test(budgetStr);
 
-      if (rateMax > 0 && rateMax < Infinity && maxBudgetValue > rateMax) {
-        return {
-          pass: false,
-          filter_reason: `Budget (${opportunity.budget}) appears to exceed the maximum project value of $${rateMax.toLocaleString()}.`,
-        };
+    if (!isHourlyOrDaily) {
+      const budgetNumbers = extractNumbers(budgetStr);
+      if (budgetNumbers.length > 0) {
+        // Use the highest number found — most likely to represent the contract
+        // ceiling rather than an hourly floor.
+        const maxBudgetValue = Math.max(...budgetNumbers);
+
+        if (maxBudgetValue < rateMin) {
+          return {
+            pass: false,
+            filter_reason: `Budget (${opportunity.budget}) appears to be below the minimum project value of $${rateMin.toLocaleString()}.`,
+          };
+        }
+
+        if (rateMax > 0 && rateMax < Infinity && maxBudgetValue > rateMax) {
+          return {
+            pass: false,
+            filter_reason: `Budget (${opportunity.budget}) appears to exceed the maximum project value of $${rateMax.toLocaleString()}.`,
+          };
+        }
       }
     }
   }
