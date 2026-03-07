@@ -2,6 +2,8 @@
 
 'use strict';
 
+require('dotenv').config();
+
 const { runPipeline } = require('./pipeline');
 const { startDashboard } = require('./dashboard');
 

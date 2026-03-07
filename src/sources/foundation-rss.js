@@ -24,12 +24,12 @@ const FEEDS = [
   {
     id: 'ford-foundation',
     name: 'Ford Foundation',
-    url: 'https://www.fordfoundation.org/news/rss/',
+    url: 'https://www.fordfoundation.org/news-and-stories/feed/',
   },
   {
-    id: 'macarthur-foundation',
-    name: 'MacArthur Foundation',
-    url: 'https://www.macfound.org/feeds/stories/',
+    id: 'hewlett-foundation',
+    name: 'Hewlett Foundation',
+    url: 'https://hewlett.org/feed/',
   },
 ];
 
