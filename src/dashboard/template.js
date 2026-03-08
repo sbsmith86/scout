@@ -541,7 +541,9 @@ function renderPage() {
 </div>
 
 <script>
-  // ── Tab switching ─────────────────────────────────────────────────────────
+  // ── Constants ─────────────────────────────────────────────────────────────
+  // Must match the CSS transition on .filtered-item opacity (0.4s = 400 ms).
+  const FADE_OUT_MS = 400;
   document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       document.querySelectorAll('.tab-btn').forEach(b => {
@@ -670,14 +672,10 @@ function renderPage() {
   </div>
   <span class="filtered-type-badge">\${esc(item.item_type || 'item')}</span>
   <button class="btn btn-skip" style="font-size:12px;padding:4px 10px" title="Good filter — correctly filtered"
-    data-item-id="\${esc(item.item_id)}" data-item-type="\${esc(item.item_type || '')}"
-    data-filter-reason="\${esc(item.filter_reason || '')}" data-title="\${esc(displayTitle)}"
-    data-org="\${esc(item.org || '')}" data-source="\${esc(item.source || '')}" data-feedback="good_filter"
+    data-corr-id="\${esc(item.id)}" data-feedback="good_filter"
     onclick="thumbFeedback(this)">👍</button>
   <button class="btn btn-edit" style="font-size:12px;padding:4px 10px" title="Bad filter — should have surfaced"
-    data-item-id="\${esc(item.item_id)}" data-item-type="\${esc(item.item_type || '')}"
-    data-filter-reason="\${esc(item.filter_reason || '')}" data-title="\${esc(displayTitle)}"
-    data-org="\${esc(item.org || '')}" data-source="\${esc(item.source || '')}" data-feedback="bad_filter"
+    data-corr-id="\${esc(item.id)}" data-feedback="bad_filter"
     onclick="thumbFeedback(this)">👎</button>
 </div>\`;
   }
@@ -826,19 +824,24 @@ function renderPage() {
   // ── Action: Thumb feedback on filtered items ──────────────────────────────
   async function thumbFeedback(btn) {
     btn.disabled = true;
-    const { itemId, itemType, filterReason, title, org, source, feedback } = btn.dataset;
+    const { corrId, feedback } = btn.dataset;
     try {
-      const res = await fetch('/api/corrections', {
-        method: 'POST',
+      const res = await fetch('/api/corrections/' + encodeURIComponent(corrId) + '/feedback', {
+        method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ item_id: itemId, item_type: itemType, filter_reason: filterReason, title, org, source, feedback }),
+        body: JSON.stringify({ feedback }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({ error: res.statusText }));
         throw new Error(err.error || res.statusText);
       }
-      btn.style.opacity = '0.4';
-      btn.title = feedback === 'good_filter' ? 'Marked: good filter' : 'Marked: should have surfaced';
+      // Visual confirmation: fade the row out and remove it from the DOM
+      const row = btn.closest('.filtered-item');
+      if (row) {
+        row.style.transition = 'opacity ' + (FADE_OUT_MS / 1000) + 's';
+        row.style.opacity = '0';
+        setTimeout(() => row.remove(), FADE_OUT_MS + 20);
+      }
     } catch (e) {
       btn.disabled = false;
       alert('Error saving feedback: ' + e.message);

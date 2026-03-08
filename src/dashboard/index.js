@@ -9,17 +9,18 @@
  *   GET  /api/opportunities/approved Approved opportunities from Google Sheets
  *   GET  /api/leads                  Pending leads from Google Sheets
  *   GET  /api/leads/approved         Approved leads from Google Sheets
- *   GET  /api/filtered               Filtered items from the Corrections Log
+ *   GET  /api/filtered               Unreviewed filtered items (empty feedback) from Corrections Log
  *   PATCH /api/opportunities/:id/status  Update opportunity status in Sheets
  *   PATCH /api/leads/:id/status          Update lead status in Sheets
  *   PATCH /api/opportunities/:id/draft   Update opportunity draft text in Sheets
  *   PATCH /api/leads/:id/draft           Update lead draft text in Sheets
- *   POST  /api/corrections               Append a correction/feedback entry to Sheets
+ *   POST  /api/corrections               Append a new correction/feedback entry to Sheets
+ *   PATCH /api/corrections/:id/feedback  Update feedback on an existing correction row
  */
 
 const express = require('express');
 const { randomUUID } = require('crypto');
-const { readOpportunities, readLeads, readCorrections, updateStatus, updateDraftText, appendCorrection } = require('../sheets');
+const { readOpportunities, readLeads, readCorrections, updateStatus, updateDraftText, appendCorrection, updateCorrectionFeedback } = require('../sheets');
 const { renderPage } = require('./template');
 
 const DEFAULT_PORT = process.env.PORT || 3000;
@@ -79,7 +80,9 @@ function createApp() {
   app.get('/api/filtered', async (_req, res) => {
     try {
       const rows = await readCorrections();
-      res.json(rows);
+      // Only return unreviewed items (empty feedback) so already-feedbacked
+      // items don't reappear after a page reload.
+      res.json(rows.filter((r) => !r.feedback));
     } catch (err) {
       res.status(500).json({ error: err.message });
     }
@@ -156,6 +159,22 @@ function createApp() {
       const id = `corr-${randomUUID()}`;
       await appendCorrection({ id, item_id, item_type: item_type || 'unknown', title, org, source, filter_reason, feedback });
       res.json({ ok: true, id });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ── Update feedback on an existing correction ──────────────────────────────
+
+  app.patch('/api/corrections/:id/feedback', async (req, res) => {
+    const { id } = req.params;
+    const { feedback } = req.body || {};
+    if (!feedback || !VALID_FEEDBACK.has(feedback)) {
+      return res.status(400).json({ error: `Invalid feedback. Must be one of: ${[...VALID_FEEDBACK].join(', ')}` });
+    }
+    try {
+      await updateCorrectionFeedback(id, feedback);
+      res.json({ ok: true, id, feedback });
     } catch (err) {
       res.status(500).json({ error: err.message });
     }

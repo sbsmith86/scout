@@ -233,6 +233,44 @@ async function appendCorrection(correction) {
 }
 
 /**
+ * Updates the feedback field of an existing Corrections Log row.
+ * Finds the row by id and updates the feedback column in place.
+ *
+ * @param {string} id       The correction row id (e.g. 'corr-abc12345')
+ * @param {string} feedback 'good_filter' | 'bad_filter'
+ */
+async function updateCorrectionFeedback(id, feedback) {
+  const sheets = await getSheetsClient();
+  const spreadsheetId = getSpreadsheetId();
+
+  const feedbackCol = CORRECTIONS_HEADERS.indexOf('feedback');
+
+  // Read column A (ids) to find the row number
+  const idRes = await sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range: 'Corrections Log!A:A',
+  });
+  const ids = (idRes.data.values || []).flat();
+  const rowIndex = ids.indexOf(id);
+
+  if (rowIndex === -1) {
+    throw new Error(`Row with id "${id}" not found in Corrections Log`);
+  }
+
+  // Sheets rows are 1-indexed; rowIndex 0 is the header row
+  const rowNumber = rowIndex + 1;
+  const colLetter = columnLetter(feedbackCol);
+  const cellRange = `Corrections Log!${colLetter}${rowNumber}`;
+
+  await sheets.spreadsheets.values.update({
+    spreadsheetId,
+    range: cellRange,
+    valueInputOption: 'RAW',
+    requestBody: { values: [[feedback]] },
+  });
+}
+
+/**
  * Updates the status of an existing row by finding the row with the given id.
  * Scans column A for the id, then updates the status column in place.
  *
@@ -318,6 +356,7 @@ module.exports = {
   appendOpportunity,
   appendLead,
   appendCorrection,
+  updateCorrectionFeedback,
   updateStatus,
   updateDraftText,
   initializeHeaders,
