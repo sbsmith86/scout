@@ -10,14 +10,14 @@ const OPPORTUNITIES_HEADERS = [
   'score', 'confidence', 'surface_reason', 'description',
   'contact_name', 'contact_title', 'contact_email', 'contact_linkedin',
   'application_type', 'application_notes',
-  'status', 'date_surfaced', 'draft_doc_link',
+  'status', 'date_surfaced', 'draft_text', 'draft_doc_link',
 ];
 
 const LEADS_HEADERS = [
   'id', 'org', 'funder', 'funding_amount', 'funding_date', 'mission_summary',
   'score', 'confidence', 'surface_reason',
   'contact_name', 'contact_title', 'contact_email', 'contact_linkedin',
-  'status', 'date_surfaced', 'draft_doc_link',
+  'status', 'date_surfaced', 'draft_text', 'draft_doc_link',
 ];
 
 const CORRECTIONS_HEADERS = [
@@ -98,6 +98,7 @@ async function initializeAllHeaders() {
  * @param {string} opportunity.application_notes
  * @param {string} [opportunity.status='pending']   'pending' | 'approved' | 'skipped' | 'sent'
  * @param {string} [opportunity.date_surfaced]      ISO timestamp; defaults to now
+ * @param {string} [opportunity.draft_text]        Editable draft proposal text
  * @param {string} [opportunity.draft_doc_link]
  */
 async function appendOpportunity(opportunity) {
@@ -124,12 +125,13 @@ async function appendOpportunity(opportunity) {
     opportunity.application_notes ?? '',
     opportunity.status ?? 'pending',
     opportunity.date_surfaced ?? new Date().toISOString(),
+    opportunity.draft_text ?? '',
     opportunity.draft_doc_link ?? '',
   ];
 
   await sheets.spreadsheets.values.append({
     spreadsheetId,
-    range: 'Opportunities!A:T',
+    range: 'Opportunities!A:U',
     valueInputOption: 'RAW',
     insertDataOption: 'INSERT_ROWS',
     requestBody: { values: [row] },
@@ -155,6 +157,7 @@ async function appendOpportunity(opportunity) {
  * @param {string} lead.contact_linkedin
  * @param {string} [lead.status='pending']          'pending' | 'approved' | 'skipped' | 'sent'
  * @param {string} [lead.date_surfaced]             ISO timestamp; defaults to now
+ * @param {string} [lead.draft_text]                Editable draft outreach text
  * @param {string} [lead.draft_doc_link]
  */
 async function appendLead(lead) {
@@ -177,12 +180,13 @@ async function appendLead(lead) {
     lead.contact_linkedin ?? '',
     lead.status ?? 'pending',
     lead.date_surfaced ?? new Date().toISOString(),
+    lead.draft_text ?? '',
     lead.draft_doc_link ?? '',
   ];
 
   await sheets.spreadsheets.values.append({
     spreadsheetId,
-    range: 'Leads!A:P',
+    range: 'Leads!A:Q',
     valueInputOption: 'RAW',
     insertDataOption: 'INSERT_ROWS',
     requestBody: { values: [row] },
@@ -269,11 +273,53 @@ async function updateStatus(sheetName, id, status) {
   });
 }
 
+/**
+ * Updates the draft_text of an existing row by finding the row with the given id.
+ * Scans column A for the id, then updates the draft_text column in place.
+ *
+ * @param {'Opportunities'|'Leads'} sheetName
+ * @param {string} id
+ * @param {string} draftText  New draft text content
+ */
+async function updateDraftText(sheetName, id, draftText) {
+  const sheets = await getSheetsClient();
+  const spreadsheetId = getSpreadsheetId();
+
+  const headers = sheetName === 'Opportunities' ? OPPORTUNITIES_HEADERS : LEADS_HEADERS;
+  const draftCol = headers.indexOf('draft_text');
+  if (draftCol === -1) {
+    throw new Error(`No draft_text column found in sheet: ${sheetName}`);
+  }
+
+  // Read column A (ids) to find the row number
+  const idRange = `${sheetName}!A:A`;
+  const idRes = await sheets.spreadsheets.values.get({ spreadsheetId, range: idRange });
+  const ids = (idRes.data.values || []).flat();
+  const rowIndex = ids.indexOf(id);
+
+  if (rowIndex === -1) {
+    throw new Error(`Row with id "${id}" not found in sheet: ${sheetName}`);
+  }
+
+  // Sheets rows are 1-indexed; rowIndex 0 is the header row
+  const rowNumber = rowIndex + 1;
+  const colLetter = columnLetter(draftCol);
+  const cellRange = `${sheetName}!${colLetter}${rowNumber}`;
+
+  await sheets.spreadsheets.values.update({
+    spreadsheetId,
+    range: cellRange,
+    valueInputOption: 'RAW',
+    requestBody: { values: [[draftText]] },
+  });
+}
+
 module.exports = {
   appendOpportunity,
   appendLead,
   appendCorrection,
   updateStatus,
+  updateDraftText,
   initializeHeaders,
   initializeAllHeaders,
   OPPORTUNITIES_HEADERS,

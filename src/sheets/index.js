@@ -4,7 +4,7 @@
 // See CLAUDE.md for the three-sheet data schema (Opportunities, Leads, Corrections Log).
 
 const { getSheetsClient, getSpreadsheetId } = require('./client');
-const { appendOpportunity, appendLead, appendCorrection, updateStatus, initializeHeaders, initializeAllHeaders } = require('./write');
+const { appendOpportunity, appendLead, appendCorrection, updateStatus, updateDraftText, initializeHeaders, initializeAllHeaders } = require('./write');
 const { readOpportunities, readLeads, readCorrections, readPendingForDashboard } = require('./read');
 
 module.exports = {
@@ -16,6 +16,7 @@ module.exports = {
   appendLead,
   appendCorrection,
   updateStatus,
+  updateDraftText,
   initializeHeaders,
   initializeAllHeaders,
   // Read
