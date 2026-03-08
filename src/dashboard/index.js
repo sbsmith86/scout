@@ -25,6 +25,7 @@ const { renderPage } = require('./template');
 const DEFAULT_PORT = process.env.PORT || 3000;
 
 const VALID_STATUSES = new Set(['pending', 'approved', 'skipped', 'sent']);
+const VALID_FEEDBACK = new Set(['good_filter', 'bad_filter']);
 
 /**
  * Create and return the Express application without starting it.
@@ -148,7 +149,6 @@ function createApp() {
 
   app.post('/api/corrections', async (req, res) => {
     const { item_id, item_type, filter_reason, title, org, source, feedback } = req.body || {};
-    const VALID_FEEDBACK = new Set(['good_filter', 'bad_filter']);
     if (!item_id || !feedback || !VALID_FEEDBACK.has(feedback)) {
       return res.status(400).json({ error: 'item_id and valid feedback (good_filter|bad_filter) are required' });
     }

@@ -670,9 +670,15 @@ function renderPage() {
   </div>
   <span class="filtered-type-badge">\${esc(item.item_type || 'item')}</span>
   <button class="btn btn-skip" style="font-size:12px;padding:4px 10px" title="Good filter — correctly filtered"
-    onclick="thumbFeedback(this, '\${esc(item.item_id)}', '\${esc(item.item_type)}', '\${esc(item.filter_reason || '')}', '\${esc(displayTitle)}', '\${esc(item.org || '')}', '\${esc(item.source || '')}', 'good_filter')">👍</button>
+    data-item-id="\${esc(item.item_id)}" data-item-type="\${esc(item.item_type || '')}"
+    data-filter-reason="\${esc(item.filter_reason || '')}" data-title="\${esc(displayTitle)}"
+    data-org="\${esc(item.org || '')}" data-source="\${esc(item.source || '')}" data-feedback="good_filter"
+    onclick="thumbFeedback(this)">👍</button>
   <button class="btn btn-edit" style="font-size:12px;padding:4px 10px" title="Bad filter — should have surfaced"
-    onclick="thumbFeedback(this, '\${esc(item.item_id)}', '\${esc(item.item_type)}', '\${esc(item.filter_reason || '')}', '\${esc(displayTitle)}', '\${esc(item.org || '')}', '\${esc(item.source || '')}', 'bad_filter')">👎</button>
+    data-item-id="\${esc(item.item_id)}" data-item-type="\${esc(item.item_type || '')}"
+    data-filter-reason="\${esc(item.filter_reason || '')}" data-title="\${esc(displayTitle)}"
+    data-org="\${esc(item.org || '')}" data-source="\${esc(item.source || '')}" data-feedback="bad_filter"
+    onclick="thumbFeedback(this)">👎</button>
 </div>\`;
   }
 
@@ -818,8 +824,9 @@ function renderPage() {
   }
 
   // ── Action: Thumb feedback on filtered items ──────────────────────────────
-  async function thumbFeedback(btn, itemId, itemType, filterReason, title, org, source, feedback) {
+  async function thumbFeedback(btn) {
     btn.disabled = true;
+    const { itemId, itemType, filterReason, title, org, source, feedback } = btn.dataset;
     try {
       const res = await fetch('/api/corrections', {
         method: 'POST',
@@ -902,6 +909,7 @@ function renderPage() {
     const statusEndpoint = type === 'opportunity'
       ? \`/api/opportunities/\${encodeURIComponent(id)}/status\`
       : \`/api/leads/\${encodeURIComponent(id)}/status\`;
+    let draftSaved = false;
     try {
       const draftRes = await fetch(draftEndpoint, {
         method: 'PATCH',
@@ -912,6 +920,7 @@ function renderPage() {
         const err = await draftRes.json().catch(() => ({ error: draftRes.statusText }));
         throw new Error(err.error || draftRes.statusText);
       }
+      draftSaved = true;
       const statusRes = await fetch(statusEndpoint, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -930,7 +939,10 @@ function renderPage() {
     } catch (e) {
       saveBtn.disabled = false;
       approveBtn.disabled = false;
-      alert('Error saving and approving: ' + e.message);
+      const msg = draftSaved
+        ? \`Draft saved, but approval failed: \${e.message}. You can close this dialog and try approving again.\`
+        : \`Error saving draft: \${e.message}\`;
+      alert(msg);
     }
   }
 
