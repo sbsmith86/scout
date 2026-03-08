@@ -19,23 +19,56 @@ const crypto = require('crypto');
 // ---------------------------------------------------------------------------
 // Feed definitions — add more foundations here (Phase 3) without touching
 // anything else in the pipeline.
+//
+// Source selection rationale:
+//   • PND (Philanthropy News Digest) is the gold-standard aggregator for grant
+//     award announcements.  Each item reports a specific grant — recipient org,
+//     funder, amount, and purpose — exactly the signal the Funding Monitor needs.
+//   • MacArthur Foundation publishes a dedicated grants RSS that lists individual
+//     grants awarded (distinct from their general news blog).
+//   • Hewlett Foundation's /grants/ category feed surfaces grant announcements
+//     rather than the general /feed/ blog posts that caused false negatives in
+//     the previous configuration.
+//
+// Feeds that were removed:
+//   • fordfoundation.org/news-and-stories/feed/ — returned 0 items (feed appears
+//     broken / redirected after a CMS migration).
+//   • hewlett.org/feed/ — returned only general blog posts, not grant awards.
 // ---------------------------------------------------------------------------
 const FEEDS = [
   {
-    id: 'ford-foundation',
-    name: 'Ford Foundation',
-    url: 'https://www.fordfoundation.org/news-and-stories/feed/',
+    // Primary aggregator — reports grants from hundreds of foundations in a
+    // consistent format: "Foundation Awards $X to OrgName for Purpose"
+    id: 'pnd-grants',
+    name: 'Philanthropy News Digest (Candid)',
+    url: 'https://philanthropynewsdigest.org/feeds/grants',
   },
   {
-    id: 'hewlett-foundation',
-    name: 'Hewlett Foundation',
-    url: 'https://hewlett.org/feed/',
+    // MacArthur Foundation grants-specific RSS (separate from their news blog)
+    id: 'macarthur-grants',
+    name: 'MacArthur Foundation Grants',
+    url: 'https://www.macfound.org/feeds/grants/',
+  },
+  {
+    // Hewlett Foundation grants category — WordPress category feed, not the
+    // general /feed/ which returns editorial blog posts
+    id: 'hewlett-grants',
+    name: 'Hewlett Foundation Grants',
+    url: 'https://hewlett.org/grants/feed/',
   },
 ];
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+// Shared sub-pattern fragment for a dollar amount with optional magnitude word
+// (e.g. "$2.5 Million", "$500,000", "$750k").  Used in org-extraction regexes
+// below so both patterns stay in sync if the format ever needs updating.
+// Both lower- and Title-Case magnitude words are listed explicitly to avoid
+// using the /i flag, which would cause [A-Z] in capture groups to also match
+// lowercase letters (breaking the uppercase-org-name enforcement).
+const DOLLAR_AMOUNT_RE = String.raw`\$[\d,.]+(?:\s*(?:[mM]illion|[bB]illion|[tT]housand|[kK]))?`;
 
 /**
  * Deterministic ID derived from the feed source + item URL so that the same
@@ -72,15 +105,30 @@ function extractBudget(text) {
 function heuristicExtractOrg(title, description, foundationName) {
   const text = `${title || ''} ${description || ''}`;
 
-  // Pattern: "to <Org>" / "awarded to <Org>" / "grant to <Org>"
+  // Pattern: "Awards/Grants $X to <Org>" — common in PND titles, e.g.
+  // "Ford Foundation Awards $2.5 Million to Community Action Network for ..."
+  // Also handles "$500k" shorthand and org names that appear at end of title.
+  // Magnitude words use explicit case variants ([mM]illion etc.) so [A-Z] in
+  // the capture group still enforces an uppercase org-name start character.
+  const dollarToMatch = text.match(
+    new RegExp(String.raw`${DOLLAR_AMOUNT_RE}\s+to\s+([A-Z][^.,;:()]{3,60}?)(?=\s*(?:,|\.|;|\bfor\b)|$)`)
+  );
+  if (dollarToMatch) return dollarToMatch[1].trim();
+
+  // Pattern: "to <Org>" / "awarded to <Org>" / "grants $X to <Org>"
+  // Handles optional dollar amount (with Title-Case magnitude) between the
+  // verb and "to".  Both lower and Title-Case verb forms are listed explicitly
+  // so that [A-Z] in the capture group still rejects lowercase-starting words.
   const toMatch = text.match(
-    /(?:awarded?|grant(?:ed)?|support(?:ing)?|fund(?:ing)?)\s+(?:to\s+)?([A-Z][^.,;:()]{3,60}?)(?:\s*(?:,|\.|;|\bfor\b|\bto\b))/
+    new RegExp(String.raw`(?:award(?:ed|s)?|Award(?:ed|s)?|grant(?:ed|s)?|Grant(?:ed|s)?|support(?:ing)?|fund(?:ing)?)\s+(?:${DOLLAR_AMOUNT_RE}\s+)?(?:to\s+)?([A-Z][^.,;:()]{3,60}?)(?=\s*(?:,|\.|;|\bfor\b|\bto\b)|$)`)
   );
   if (toMatch) return toMatch[1].trim();
 
-  // Pattern: "<Org> receives" / "<Org> awarded"
+  // Pattern: "<Org> receives" / "<Org> awarded" — `i` flag only affects the
+  // verb ("Receives" vs "receives") since the org group is anchored at ^ and
+  // real org names always start with an uppercase letter.
   const receivesMatch = text.match(
-    /^([A-Z][^.,;:()]{3,60}?)\s+(?:receives?|is\s+awarded?|has\s+been\s+awarded?)/
+    /^([A-Z][^.,;:()]{3,60}?)\s+(?:receives?|is\s+awarded?|has\s+been\s+awarded?)/i
   );
   if (receivesMatch) return receivesMatch[1].trim();
 
