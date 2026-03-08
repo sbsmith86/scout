@@ -234,7 +234,9 @@ async function appendCorrection(correction) {
 
 /**
  * Updates the feedback field of an existing Corrections Log row.
- * Finds the row by id and updates the feedback column in place.
+ * Finds the most recent row with the given id whose feedback is empty;
+ * falls back to the most recent row with that id if all are already reviewed.
+ * Throws a descriptive error if no row with the given id exists.
  *
  * @param {string} id       The correction row id (e.g. 'corr-abc12345')
  * @param {string} feedback 'good_filter' | 'bad_filter'
@@ -244,22 +246,45 @@ async function updateCorrectionFeedback(id, feedback) {
   const spreadsheetId = getSpreadsheetId();
 
   const feedbackCol = CORRECTIONS_HEADERS.indexOf('feedback');
+  if (feedbackCol === -1) {
+    throw new Error('feedback column not found in CORRECTIONS_HEADERS');
+  }
 
-  // Read column A (ids) to find the row number
-  const idRes = await sheets.spreadsheets.values.get({
+  // Read columns A through feedback to check both id and existing feedback value.
+  const feedbackColLetter = columnLetter(feedbackCol);
+  const rangeRes = await sheets.spreadsheets.values.get({
     spreadsheetId,
-    range: 'Corrections Log!A:A',
+    range: `Corrections Log!A:${feedbackColLetter}`,
   });
-  const ids = (idRes.data.values || []).flat();
-  const rowIndex = ids.indexOf(id);
+  const rows = rangeRes.data.values || [];
 
-  if (rowIndex === -1) {
+  // Scan from bottom (most recent) to find: first, a row with matching id and
+  // empty feedback; fall back to first row with matching id (any feedback).
+  let bestEmptyRowIndex = -1;
+  let bestAnyRowIndex = -1;
+
+  for (let i = rows.length - 1; i >= 1; i--) { // skip header at index 0
+    const rowId = (rows[i] || [])[0];
+    if (rowId !== id) continue;
+
+    if (bestAnyRowIndex === -1) bestAnyRowIndex = i;
+
+    const existingFeedback = (rows[i] || [])[feedbackCol];
+    if (!existingFeedback && bestEmptyRowIndex === -1) {
+      bestEmptyRowIndex = i;
+      break; // found the most recent unreviewed match — stop scanning
+    }
+  }
+
+  const targetRowIndex = bestEmptyRowIndex !== -1 ? bestEmptyRowIndex : bestAnyRowIndex;
+
+  if (targetRowIndex === -1) {
     throw new Error(`Row with id "${id}" not found in Corrections Log`);
   }
 
-  // Sheets rows are 1-indexed; rowIndex 0 is the header row
-  const rowNumber = rowIndex + 1;
-  const colLetter = columnLetter(feedbackCol);
+  // Sheets rows are 1-indexed; index 0 is the header row
+  const rowNumber = targetRowIndex + 1;
+  const colLetter = feedbackColLetter;
   const cellRange = `Corrections Log!${colLetter}${rowNumber}`;
 
   await sheets.spreadsheets.values.update({

@@ -80,8 +80,8 @@ function createApp() {
   app.get('/api/filtered', async (_req, res) => {
     try {
       const rows = await readCorrections();
-      // Only return unreviewed items (empty feedback) so already-feedbacked
-      // items don't reappear after a page reload.
+      // Only return unreviewed items (empty feedback) so items that already have
+      // feedback don't reappear after a page reload.
       res.json(rows.filter((r) => !r.feedback));
     } catch (err) {
       res.status(500).json({ error: err.message });
@@ -176,6 +176,10 @@ function createApp() {
       await updateCorrectionFeedback(id, feedback);
       res.json({ ok: true, id, feedback });
     } catch (err) {
+      // A missing row is a client error; only use 500 for actual backend failures.
+      if (err.message && err.message.toLowerCase().includes('not found')) {
+        return res.status(404).json({ error: err.message });
+      }
       res.status(500).json({ error: err.message });
     }
   });
