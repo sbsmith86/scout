@@ -6,16 +6,16 @@
  * Scrapes the Idealist.org consulting-opportunities section, normalises each
  * listing to the standard opportunity schema, and returns the array.
  *
- * Cheerio is used for static HTML parsing.  Idealist renders its search
- * results server-side (the listing markup is present in the initial HTML
- * response), so Playwright is not required.
+ * Idealist renders search results via client-side JavaScript (React/Next.js),
+ * so Playwright is used to fully render the page before extracting listings.
+ * Cheerio is used for HTML parsing after the page has been rendered.
  *
  * If the page structure changes and scraping breaks, look for the SSR JSON
  * payload embedded in a <script id="__NEXT_DATA__"> tag first — it contains
  * the full listings array and is far more stable than CSS selectors.
  */
 
-const https = require('https');
+const { chromium } = require('playwright');
 const cheerio = require('cheerio');
 
 const BASE_URL = 'https://www.idealist.org';
@@ -79,50 +79,29 @@ function buildSearchTerms(profile) {
   return [...terms].slice(0, MAX_SEARCH_TERMS);
 }
 
-/** Promisified HTTPS GET with redirect following and a 15-second timeout. */
-function fetchPage(url, redirectCount = 0) {
-  return new Promise((resolve, reject) => {
-    if (redirectCount > 5) {
-      return reject(new Error(`Too many redirects for ${url}`));
-    }
+/**
+ * Fetch a fully JS-rendered page using Playwright (headless Chromium).
+ * Waits for the network to go idle so React/Next.js hydration completes
+ * before the HTML is captured.
+ *
+ * @param {import('playwright').Page} page  An open Playwright Page instance.
+ * @param {string} url                      The URL to navigate to.
+ * @returns {Promise<{html: string, statusCode: number}>}
+ */
+async function fetchPage(page, url) {
+  let statusCode = 200;
 
-    const req = https.get(
-      url,
-      {
-        headers: {
-          'User-Agent':
-            'Mozilla/5.0 (compatible; Scout/1.0; +https://hostechnology.io)',
-          Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9',
-          'Accept-Language': 'en-US,en;q=0.9',
-        },
-      },
-      (res) => {
-        // Follow HTTP 3xx redirects.
-        if (
-          res.statusCode >= 300 &&
-          res.statusCode < 400 &&
-          res.headers.location
-        ) {
-          const next = res.headers.location.startsWith('http')
-            ? res.headers.location
-            : `${BASE_URL}${res.headers.location}`;
-          res.resume(); // drain and discard
-          return fetchPage(next, redirectCount + 1).then(resolve).catch(reject);
-        }
-
-        let body = '';
-        res.setEncoding('utf8');
-        res.on('data', (chunk) => { body += chunk; });
-        res.on('end', () => resolve({ html: body, statusCode: res.statusCode }));
-        res.on('error', reject);
-      }
-    );
-
-    req.on('error', reject);
-    req.setTimeout(15000, () => {
-      req.destroy(new Error(`Request timed out: ${url}`));
-    });
+  const response = await page.goto(url, {
+    waitUntil: 'networkidle',
+    timeout: 30000,
   });
+
+  if (response) {
+    statusCode = response.status();
+  }
+
+  const html = await page.content();
+  return { html, statusCode };
 }
 
 /** Returns a promise that resolves after `ms` milliseconds. */
@@ -433,68 +412,80 @@ module.exports = {
     const logTerms = searchTerms.map((t) => t.slice(0, 40));
     console.log(`[idealist] Search terms (${searchTerms.length}): ${logTerms.join(' | ')}`);
 
-    for (let termIdx = 0; termIdx < searchTerms.length; termIdx++) {
-      const term = searchTerms[termIdx];
-      let page = 1;
-      let morePages = true;
+    const browser = await chromium.launch({ headless: true });
+    try {
+      const context = await browser.newContext({
+        userAgent:
+          'Mozilla/5.0 (compatible; Scout/1.0; +https://hostechnology.io)',
+        locale: 'en-US',
+      });
+      const page = await context.newPage();
 
-      while (morePages && page <= MAX_PAGES) {
-        const params = new URLSearchParams({ type: 'CONSULTING', q: term });
-        if (page > 1) params.set('page', String(page));
+      for (let termIdx = 0; termIdx < searchTerms.length; termIdx++) {
+        const term = searchTerms[termIdx];
+        let pageNum = 1;
+        let morePages = true;
 
-        const pageUrl = `${SEARCH_URL}?${params.toString()}`;
-        console.log(`[idealist] Fetching page ${page} for "${term}": ${pageUrl}`);
+        while (morePages && pageNum <= MAX_PAGES) {
+          const params = new URLSearchParams({ type: 'CONSULTING', q: term });
+          if (pageNum > 1) params.set('page', String(pageNum));
 
-        let html, statusCode;
-        try {
-          ({ html, statusCode } = await fetchPage(pageUrl));
-        } catch (err) {
-          console.warn(`[idealist] Request failed (${pageUrl}): ${err.message}`);
-          break;
-        }
+          const pageUrl = `${SEARCH_URL}?${params.toString()}`;
+          console.log(`[idealist] Fetching page ${pageNum} for "${term}": ${pageUrl}`);
 
-        if (statusCode !== 200) {
-          console.warn(`[idealist] HTTP ${statusCode} for ${pageUrl} — stopping this term`);
-          break;
-        }
-
-        const $ = cheerio.load(html);
-
-        // Prefer the structured JSON payload embedded by Next.js — it is more
-        // reliable than CSS selectors and less likely to break on layout changes.
-        const nextData = extractNextData($);
-        let listings = nextData ? listingsFromNextData(nextData) : [];
-
-        // Fall back to HTML selector scraping if the JSON path yields nothing.
-        if (listings.length === 0) {
-          listings = listingsFromHTML($);
-        }
-
-        if (listings.length === 0) {
-          console.log(`[idealist] No listings on page ${page} for "${term}" — stopping pagination`);
-          morePages = false;
-        } else {
-          let added = 0;
-          for (const listing of listings) {
-            if (!seen.has(listing.id)) {
-              seen.add(listing.id);
-              opportunities.push(listing);
-              added++;
-            }
+          let html, statusCode;
+          try {
+            ({ html, statusCode } = await fetchPage(page, pageUrl));
+          } catch (err) {
+            console.warn(`[idealist] Request failed (${pageUrl}): ${err.name}: ${err.message}`);
+            break;
           }
-          console.log(`[idealist] Page ${page}: ${listings.length} listings, ${added} new`);
 
-          morePages = hasNextPage($);
-          page++;
+          if (statusCode !== 200) {
+            console.warn(`[idealist] HTTP ${statusCode} for ${pageUrl} — stopping this term`);
+            break;
+          }
 
-          if (morePages) await delay(REQUEST_DELAY_MS);
+          const $ = cheerio.load(html);
+
+          // Prefer the structured JSON payload embedded by Next.js — it is more
+          // reliable than CSS selectors and less likely to break on layout changes.
+          const nextData = extractNextData($);
+          let listings = nextData ? listingsFromNextData(nextData) : [];
+
+          // Fall back to HTML selector scraping if the JSON path yields nothing.
+          if (listings.length === 0) {
+            listings = listingsFromHTML($);
+          }
+
+          if (listings.length === 0) {
+            console.log(`[idealist] No listings on page ${pageNum} for "${term}" — stopping pagination`);
+            morePages = false;
+          } else {
+            let added = 0;
+            for (const listing of listings) {
+              if (!seen.has(listing.id)) {
+                seen.add(listing.id);
+                opportunities.push(listing);
+                added++;
+              }
+            }
+            console.log(`[idealist] Page ${pageNum}: ${listings.length} listings, ${added} new`);
+
+            morePages = hasNextPage($);
+            pageNum++;
+
+            if (morePages) await delay(REQUEST_DELAY_MS);
+          }
+        }
+
+        // Polite delay between different search terms.
+        if (termIdx < searchTerms.length - 1) {
+          await delay(REQUEST_DELAY_MS);
         }
       }
-
-      // Polite delay between different search terms.
-      if (termIdx < searchTerms.length - 1) {
-        await delay(REQUEST_DELAY_MS);
-      }
+    } finally {
+      await browser.close();
     }
 
     console.log(`[idealist] Done — ${opportunities.length} total opportunities`);
