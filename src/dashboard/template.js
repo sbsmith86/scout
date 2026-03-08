@@ -315,6 +315,159 @@ function renderPage() {
       .tab-panel { padding: 16px; }
       .tab-btn { padding: 12px 12px; font-size: 13px; }
     }
+
+    /* ── Action buttons ──────────────────────────────────────── */
+    .card-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 14px;
+      padding-top: 14px;
+      border-top: 1px solid var(--border);
+      flex-wrap: wrap;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      border: none;
+      border-radius: 6px;
+      padding: 7px 14px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity .15s, background .15s;
+    }
+    .btn:disabled { opacity: .45; cursor: not-allowed; }
+    .btn-approve { background: #16a34a; color: #fff; }
+    .btn-approve:hover:not(:disabled) { background: #15803d; }
+    .btn-skip    { background: var(--bg); color: var(--text-muted); border: 1px solid var(--border); }
+    .btn-skip:hover:not(:disabled)    { background: #f1f3f5; }
+    .btn-edit    { background: var(--accent-light); color: var(--accent); border: 1px solid #bcd0fb; }
+    .btn-edit:hover:not(:disabled)    { background: #dde9ff; }
+    .btn-sent    { background: #6b7280; color: #fff; font-size: 12px; padding: 5px 10px; }
+    .btn-sent:hover:not(:disabled)    { background: #4b5563; }
+
+    /* ── Approved queue ──────────────────────────────────────── */
+    .approved-queue {
+      background: #f0fdf4;
+      border: 1px solid #86efac;
+      border-radius: var(--radius);
+      padding: 16px 20px;
+      margin-bottom: 24px;
+    }
+    .approved-queue h2 {
+      font-size: 14px;
+      font-weight: 700;
+      color: #15803d;
+      margin-bottom: 10px;
+    }
+    .approved-list { display: flex; flex-direction: column; gap: 8px; }
+    .approved-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: var(--surface);
+      border: 1px solid #bbf7d0;
+      border-radius: 6px;
+      padding: 10px 14px;
+      flex-wrap: wrap;
+    }
+    .approved-item-info { flex: 1; min-width: 0; }
+    .approved-item-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .approved-item-org { font-size: 12px; color: var(--text-muted); }
+    .approved-item-doc {
+      font-size: 12px;
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .approved-item-doc:hover { text-decoration: underline; }
+    .approved-sent-badge {
+      font-size: 11px;
+      background: #e5e7eb;
+      color: #374151;
+      border-radius: 10px;
+      padding: 2px 8px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    /* ── Edit modal ──────────────────────────────────────────── */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.45);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal {
+      background: var(--surface);
+      border-radius: var(--radius);
+      box-shadow: 0 8px 32px rgba(0,0,0,.18);
+      width: 100%;
+      max-width: 680px;
+      max-height: 90vh;
+      display: flex;
+      flex-direction: column;
+    }
+    .modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+    }
+    .modal-header h3 { font-size: 16px; font-weight: 700; }
+    .modal-close {
+      background: none;
+      border: none;
+      font-size: 20px;
+      cursor: pointer;
+      color: var(--text-muted);
+      line-height: 1;
+      padding: 2px 6px;
+    }
+    .modal-close:hover { color: var(--text); }
+    .modal-body { padding: 16px 20px; flex: 1; overflow-y: auto; }
+    .modal-body label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+    }
+    .modal-body textarea {
+      width: 100%;
+      min-height: 240px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px 12px;
+      font-size: 13px;
+      font-family: inherit;
+      line-height: 1.6;
+      resize: vertical;
+      color: var(--text);
+    }
+    .modal-body textarea:focus { outline: 2px solid var(--accent); border-color: var(--accent); }
+    .modal-footer {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      padding: 12px 20px;
+      border-top: 1px solid var(--border);
+    }
   </style>
 </head>
 <body>
@@ -338,6 +491,10 @@ function renderPage() {
 
 <main>
   <section id="tab-opportunities" class="tab-panel active" role="tabpanel">
+    <div class="approved-queue" id="opp-approved-queue" style="display:none">
+      <h2>✓ Approved</h2>
+      <div class="approved-list" id="opp-approved-list"></div>
+    </div>
     <div id="opp-cards" class="cards"><div class="loading">Loading…</div></div>
     <div class="filtered-section" id="opp-filtered-section" style="display:none">
       <button class="filtered-toggle" id="opp-filtered-toggle">
@@ -349,6 +506,10 @@ function renderPage() {
   </section>
 
   <section id="tab-leads" class="tab-panel" role="tabpanel">
+    <div class="approved-queue" id="leads-approved-queue" style="display:none">
+      <h2>✓ Approved</h2>
+      <div class="approved-list" id="leads-approved-list"></div>
+    </div>
     <div id="leads-cards" class="cards"><div class="loading">Loading…</div></div>
     <div class="filtered-section" id="leads-filtered-section" style="display:none">
       <button class="filtered-toggle" id="leads-filtered-toggle">
@@ -359,6 +520,25 @@ function renderPage() {
     </div>
   </section>
 </main>
+
+<!-- Edit modal -->
+<div class="modal-overlay" id="edit-modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="modal-title">Edit Draft</h3>
+      <button class="modal-close" onclick="closeEditModal()" aria-label="Close">✕</button>
+    </div>
+    <div class="modal-body">
+      <label for="modal-draft-text">Draft text</label>
+      <textarea id="modal-draft-text" placeholder="Draft proposal or outreach message…"></textarea>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-skip" onclick="closeEditModal()">Cancel</button>
+      <button class="btn btn-edit" onclick="saveDraftOnly()" id="modal-save-btn">Save draft</button>
+      <button class="btn btn-approve" onclick="saveAndApprove()" id="modal-approve-btn">Save &amp; Approve</button>
+    </div>
+  </div>
+</div>
 
 <script>
   // ── Tab switching ─────────────────────────────────────────────────────────
@@ -414,7 +594,7 @@ function renderPage() {
     const hasDesc = Boolean(item.description);
     const hasSurface = Boolean(item.surface_reason);
     return \`
-<div class="card\${isLow ? ' low-confidence' : ''}" data-id="\${esc(item.id)}">
+<div class="card\${isLow ? ' low-confidence' : ''}" data-id="\${esc(item.id)}" id="card-opp-\${esc(item.id)}">
   \${isLow ? '<div class="low-conf-notice">⚠ Low confidence — key details may be missing</div>' : ''}
   <div class="card-header">
     <div class="card-title-block">
@@ -436,6 +616,11 @@ function renderPage() {
   <button class="expand-btn" onclick="toggleDesc(this)" data-idx="\${idx}">▸ Show description</button>
   <div class="description-preview" id="desc-opp-\${idx}">\${esc(item.description)}</div>
   \` : ''}
+  <div class="card-actions">
+    <button class="btn btn-approve" onclick="approveItem('opportunity', '\${esc(item.id)}', this)">✓ Approve</button>
+    <button class="btn btn-edit" data-type="opportunity" data-id="\${esc(item.id)}" data-title="\${esc(item.title || item.org || '')}" data-draft="\${esc(item.draft_text || item.description || '')}" onclick="openEditModal(this)">✎ Edit draft</button>
+    <button class="btn btn-skip" onclick="skipItem('opportunity', '\${esc(item.id)}', this)">✕ Skip</button>
+  </div>
 </div>\`;
   }
 
@@ -445,7 +630,7 @@ function renderPage() {
     const hasDesc = Boolean(item.mission_summary);
     const hasSurface = Boolean(item.surface_reason);
     return \`
-<div class="card\${isLow ? ' low-confidence' : ''}" data-id="\${esc(item.id)}">
+<div class="card\${isLow ? ' low-confidence' : ''}" data-id="\${esc(item.id)}" id="card-lead-\${esc(item.id)}">
   \${isLow ? '<div class="low-conf-notice">⚠ Low confidence — key details may be missing</div>' : ''}
   <div class="card-header">
     <div class="card-title-block">
@@ -465,6 +650,11 @@ function renderPage() {
   <button class="expand-btn" onclick="toggleDesc(this)" data-idx="\${idx}">▸ Show summary</button>
   <div class="description-preview" id="desc-lead-\${idx}">\${esc(item.mission_summary)}</div>
   \` : ''}
+  <div class="card-actions">
+    <button class="btn btn-approve" onclick="approveItem('lead', '\${esc(item.id)}', this)">✓ Approve</button>
+    <button class="btn btn-edit" data-type="lead" data-id="\${esc(item.id)}" data-title="\${esc(item.org || '')}" data-draft="\${esc(item.draft_text || item.mission_summary || '')}" onclick="openEditModal(this)">✎ Edit draft</button>
+    <button class="btn btn-skip" onclick="skipItem('lead', '\${esc(item.id)}', this)">✕ Skip</button>
+  </div>
 </div>\`;
   }
 
@@ -479,6 +669,10 @@ function renderPage() {
     <div class="filtered-item-reason">\${esc(item.filter_reason || 'No reason recorded.')}</div>
   </div>
   <span class="filtered-type-badge">\${esc(item.item_type || 'item')}</span>
+  <button class="btn btn-skip" style="font-size:12px;padding:4px 10px" title="Good filter — correctly filtered"
+    onclick="thumbFeedback(this, '\${esc(item.item_id)}', '\${esc(item.item_type)}', '\${esc(item.filter_reason || '')}', '\${esc(displayTitle)}', '\${esc(item.org || '')}', '\${esc(item.source || '')}', 'good_filter')">👍</button>
+  <button class="btn btn-edit" style="font-size:12px;padding:4px 10px" title="Bad filter — should have surfaced"
+    onclick="thumbFeedback(this, '\${esc(item.item_id)}', '\${esc(item.item_type)}', '\${esc(item.filter_reason || '')}', '\${esc(displayTitle)}', '\${esc(item.org || '')}', '\${esc(item.source || '')}', 'bad_filter')">👎</button>
 </div>\`;
   }
 
@@ -515,9 +709,256 @@ function renderPage() {
     list.innerHTML = items.map(filteredRow).join('');
   }
 
+  function renderApprovedQueue(listId, queueId, items, type) {
+    const queue = document.getElementById(queueId);
+    const list = document.getElementById(listId);
+    if (!items.length) { queue.style.display = 'none'; return; }
+    queue.style.display = '';
+    list.innerHTML = items.map(item => approvedQueueItem(item, type)).join('');
+  }
+
+  function approvedQueueItem(item, type) {
+    const title = type === 'opportunity' ? esc(item.title || item.org) : esc(item.org);
+    const sub = type === 'opportunity' ? esc(item.org) : \`Funded by \${esc(item.funder)}\`;
+    const isSent = item.status === 'sent';
+    const docLink = item.draft_doc_link
+      ? \`<a class="approved-item-doc" href="\${esc(item.draft_doc_link)}" target="_blank" rel="noopener">📄 View Doc</a>\`
+      : '<span style="font-size:12px;color:var(--text-muted)">No doc yet</span>';
+    return \`
+<div class="approved-item" id="approved-\${esc(item.id)}">
+  <div class="approved-item-info">
+    <div class="approved-item-title">\${title}</div>
+    <div class="approved-item-org">\${sub}</div>
+  </div>
+  \${docLink}
+  \${isSent
+    ? '<span class="approved-sent-badge">✓ Sent</span>'
+    : \`<button class="btn btn-sent" onclick="markSent('\${type}', '\${esc(item.id)}', this)">Mark as sent</button>\`
+  }
+</div>\`;
+  }
+
   function showError(containerId, msg) {
     document.getElementById(containerId).innerHTML =
       \`<div class="error-msg">Failed to load data: \${esc(msg)}</div>\`;
+  }
+
+  // ── Action: Approve ───────────────────────────────────────────────────────
+  async function approveItem(type, id, btn) {
+    const btns = btn.closest('.card-actions').querySelectorAll('button');
+    btns.forEach(b => b.disabled = true);
+    const endpoint = type === 'opportunity' ? \`/api/opportunities/\${encodeURIComponent(id)}/status\` : \`/api/leads/\${encodeURIComponent(id)}/status\`;
+    try {
+      const res = await fetch(endpoint, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'approved' }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: res.statusText }));
+        throw new Error(err.error || res.statusText);
+      }
+      // Remove card from pending list
+      const card = document.getElementById(\`card-\${type === 'opportunity' ? 'opp' : 'lead'}-\${id}\`);
+      if (card) card.remove();
+      // Re-render approved queue
+      await reloadApproved();
+      // Update pending badge counts
+      updatePendingBadge(type);
+    } catch (e) {
+      btns.forEach(b => b.disabled = false);
+      alert('Error approving: ' + e.message);
+    }
+  }
+
+  // ── Action: Skip ──────────────────────────────────────────────────────────
+  async function skipItem(type, id, btn) {
+    const btns = btn.closest('.card-actions').querySelectorAll('button');
+    btns.forEach(b => b.disabled = true);
+    const endpoint = type === 'opportunity' ? \`/api/opportunities/\${encodeURIComponent(id)}/status\` : \`/api/leads/\${encodeURIComponent(id)}/status\`;
+    try {
+      const res = await fetch(endpoint, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'skipped' }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: res.statusText }));
+        throw new Error(err.error || res.statusText);
+      }
+      const card = document.getElementById(\`card-\${type === 'opportunity' ? 'opp' : 'lead'}-\${id}\`);
+      if (card) card.remove();
+      updatePendingBadge(type);
+    } catch (e) {
+      btns.forEach(b => b.disabled = false);
+      alert('Error skipping: ' + e.message);
+    }
+  }
+
+  // ── Action: Mark as sent ──────────────────────────────────────────────────
+  async function markSent(type, id, btn) {
+    btn.disabled = true;
+    const endpoint = type === 'opportunity' ? \`/api/opportunities/\${encodeURIComponent(id)}/status\` : \`/api/leads/\${encodeURIComponent(id)}/status\`;
+    try {
+      const res = await fetch(endpoint, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'sent' }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: res.statusText }));
+        throw new Error(err.error || res.statusText);
+      }
+      // Replace button with badge
+      btn.outerHTML = '<span class="approved-sent-badge">✓ Sent</span>';
+    } catch (e) {
+      btn.disabled = false;
+      alert('Error updating status: ' + e.message);
+    }
+  }
+
+  // ── Action: Thumb feedback on filtered items ──────────────────────────────
+  async function thumbFeedback(btn, itemId, itemType, filterReason, title, org, source, feedback) {
+    btn.disabled = true;
+    try {
+      const res = await fetch('/api/corrections', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ item_id: itemId, item_type: itemType, filter_reason: filterReason, title, org, source, feedback }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: res.statusText }));
+        throw new Error(err.error || res.statusText);
+      }
+      btn.style.opacity = '0.4';
+      btn.title = feedback === 'good_filter' ? 'Marked: good filter' : 'Marked: should have surfaced';
+    } catch (e) {
+      btn.disabled = false;
+      alert('Error saving feedback: ' + e.message);
+    }
+  }
+
+  // ── Edit modal state ──────────────────────────────────────────────────────
+  let _modalType = null;
+  let _modalId = null;
+
+  function openEditModal(btn) {
+    _modalType = btn.dataset.type;
+    _modalId = btn.dataset.id;
+    const title = btn.dataset.title || _modalId;
+    document.getElementById('modal-title').textContent = 'Edit Draft — ' + title;
+    // dataset values are HTML-decoded automatically by the browser
+    document.getElementById('modal-draft-text').value = btn.dataset.draft || '';
+    document.getElementById('edit-modal').classList.add('open');
+    document.getElementById('modal-draft-text').focus();
+  }
+
+  function closeEditModal() {
+    document.getElementById('edit-modal').classList.remove('open');
+    _modalType = null;
+    _modalId = null;
+  }
+
+  async function saveDraftOnly() {
+    if (!_modalType || !_modalId) return;
+    const saveBtn = document.getElementById('modal-save-btn');
+    const approveBtn = document.getElementById('modal-approve-btn');
+    saveBtn.disabled = true;
+    approveBtn.disabled = true;
+    const text = document.getElementById('modal-draft-text').value;
+    const endpoint = _modalType === 'opportunity'
+      ? \`/api/opportunities/\${encodeURIComponent(_modalId)}/draft\`
+      : \`/api/leads/\${encodeURIComponent(_modalId)}/draft\`;
+    try {
+      const res = await fetch(endpoint, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ draft_text: text }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: res.statusText }));
+        throw new Error(err.error || res.statusText);
+      }
+      closeEditModal();
+    } catch (e) {
+      saveBtn.disabled = false;
+      approveBtn.disabled = false;
+      alert('Error saving draft: ' + e.message);
+    }
+  }
+
+  async function saveAndApprove() {
+    if (!_modalType || !_modalId) return;
+    const saveBtn = document.getElementById('modal-save-btn');
+    const approveBtn = document.getElementById('modal-approve-btn');
+    saveBtn.disabled = true;
+    approveBtn.disabled = true;
+    const text = document.getElementById('modal-draft-text').value;
+    const type = _modalType;
+    const id = _modalId;
+    const draftEndpoint = type === 'opportunity'
+      ? \`/api/opportunities/\${encodeURIComponent(id)}/draft\`
+      : \`/api/leads/\${encodeURIComponent(id)}/draft\`;
+    const statusEndpoint = type === 'opportunity'
+      ? \`/api/opportunities/\${encodeURIComponent(id)}/status\`
+      : \`/api/leads/\${encodeURIComponent(id)}/status\`;
+    try {
+      const draftRes = await fetch(draftEndpoint, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ draft_text: text }),
+      });
+      if (!draftRes.ok) {
+        const err = await draftRes.json().catch(() => ({ error: draftRes.statusText }));
+        throw new Error(err.error || draftRes.statusText);
+      }
+      const statusRes = await fetch(statusEndpoint, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'approved' }),
+      });
+      if (!statusRes.ok) {
+        const err = await statusRes.json().catch(() => ({ error: statusRes.statusText }));
+        throw new Error(err.error || statusRes.statusText);
+      }
+      closeEditModal();
+      // Remove card from pending list
+      const card = document.getElementById(\`card-\${type === 'opportunity' ? 'opp' : 'lead'}-\${id}\`);
+      if (card) card.remove();
+      updatePendingBadge(type);
+      await reloadApproved();
+    } catch (e) {
+      saveBtn.disabled = false;
+      approveBtn.disabled = false;
+      alert('Error saving and approving: ' + e.message);
+    }
+  }
+
+  // Close modal when clicking outside
+  document.getElementById('edit-modal').addEventListener('click', function(e) {
+    if (e.target === this) closeEditModal();
+  });
+  // Close modal on Escape key
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') closeEditModal();
+  });
+
+  // ── Reload approved queues ────────────────────────────────────────────────
+  async function reloadApproved() {
+    const [approvedOpps, approvedLeads] = await Promise.all([
+      fetch('/api/opportunities/approved').then(r => r.json()).catch(() => []),
+      fetch('/api/leads/approved').then(r => r.json()).catch(() => []),
+    ]);
+    renderApprovedQueue('opp-approved-list', 'opp-approved-queue', Array.isArray(approvedOpps) ? approvedOpps : [], 'opportunity');
+    renderApprovedQueue('leads-approved-list', 'leads-approved-queue', Array.isArray(approvedLeads) ? approvedLeads : [], 'lead');
+  }
+
+  // ── Update pending badge count ────────────────────────────────────────────
+  function updatePendingBadge(type) {
+    const containerId = type === 'opportunity' ? 'opp-cards' : 'leads-cards';
+    const badgeId = type === 'opportunity' ? 'opp-count' : 'leads-count';
+    const count = document.getElementById(containerId).querySelectorAll('.card').length;
+    document.getElementById(badgeId).textContent = count;
   }
 
   // ── Fetch & render ────────────────────────────────────────────────────────
@@ -555,7 +996,7 @@ function renderPage() {
       'Updated ' + new Date().toLocaleTimeString();
   }
 
-  loadAll();
+  Promise.all([loadAll(), reloadApproved()]);
 </script>
 </body>
 </html>`;
