@@ -267,6 +267,7 @@ function renderPage() {
       display: flex;
       align-items: flex-start;
       gap: 12px;
+      transition: opacity 0.4s;
     }
     .filtered-item:last-child { border-bottom: none; }
     .filtered-item-info { flex: 1; min-width: 0; }
@@ -541,7 +542,9 @@ function renderPage() {
 </div>
 
 <script>
-  // ── Tab switching ─────────────────────────────────────────────────────────
+  // ── Constants ─────────────────────────────────────────────────────────────
+  // FADE_OUT_MS must match the CSS opacity transition duration on .filtered-item.
+  const FADE_OUT_MS = 400;
   document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       document.querySelectorAll('.tab-btn').forEach(b => {
@@ -670,14 +673,12 @@ function renderPage() {
   </div>
   <span class="filtered-type-badge">\${esc(item.item_type || 'item')}</span>
   <button class="btn btn-skip" style="font-size:12px;padding:4px 10px" title="Good filter — correctly filtered"
-    data-item-id="\${esc(item.item_id)}" data-item-type="\${esc(item.item_type || '')}"
-    data-filter-reason="\${esc(item.filter_reason || '')}" data-title="\${esc(displayTitle)}"
-    data-org="\${esc(item.org || '')}" data-source="\${esc(item.source || '')}" data-feedback="good_filter"
+    aria-label="Mark as good filter"
+    data-corr-id="\${esc(item.id)}" data-feedback="good_filter"
     onclick="thumbFeedback(this)">👍</button>
   <button class="btn btn-edit" style="font-size:12px;padding:4px 10px" title="Bad filter — should have surfaced"
-    data-item-id="\${esc(item.item_id)}" data-item-type="\${esc(item.item_type || '')}"
-    data-filter-reason="\${esc(item.filter_reason || '')}" data-title="\${esc(displayTitle)}"
-    data-org="\${esc(item.org || '')}" data-source="\${esc(item.source || '')}" data-feedback="bad_filter"
+    aria-label="Mark as bad filter — should have surfaced"
+    data-corr-id="\${esc(item.id)}" data-feedback="bad_filter"
     onclick="thumbFeedback(this)">👎</button>
 </div>\`;
   }
@@ -825,22 +826,41 @@ function renderPage() {
 
   // ── Action: Thumb feedback on filtered items ──────────────────────────────
   async function thumbFeedback(btn) {
-    btn.disabled = true;
-    const { itemId, itemType, filterReason, title, org, source, feedback } = btn.dataset;
+    // Disable both thumb buttons on this row to prevent conflicting double-submits
+    const row = btn.closest('.filtered-item');
+    const rowBtns = row ? Array.from(row.querySelectorAll('button[data-feedback]')) : [btn];
+    rowBtns.forEach(b => { b.disabled = true; });
+    const { corrId, feedback } = btn.dataset;
     try {
-      const res = await fetch('/api/corrections', {
-        method: 'POST',
+      const res = await fetch('/api/corrections/' + encodeURIComponent(corrId) + '/feedback', {
+        method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ item_id: itemId, item_type: itemType, filter_reason: filterReason, title, org, source, feedback }),
+        body: JSON.stringify({ feedback }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({ error: res.statusText }));
         throw new Error(err.error || res.statusText);
       }
-      btn.style.opacity = '0.4';
-      btn.title = feedback === 'good_filter' ? 'Marked: good filter' : 'Marked: should have surfaced';
+      // Visual confirmation: fade the row out, remove it, and update the section label count
+      if (row) {
+        row.style.opacity = '0';
+        setTimeout(() => {
+          const list = row.closest('.filtered-list');
+          const section = list ? list.closest('.filtered-section') : null;
+          const labelEl = section ? section.querySelector('.filtered-toggle span:last-child') : null;
+          row.remove();
+          if (section && list && labelEl) {
+            const remaining = list.querySelectorAll('.filtered-item').length;
+            if (remaining === 0) {
+              section.style.display = 'none';
+            } else {
+              labelEl.textContent = remaining + ' filtered item' + (remaining === 1 ? '' : 's') + ' from latest run';
+            }
+          }
+        }, FADE_OUT_MS + 20);
+      }
     } catch (e) {
-      btn.disabled = false;
+      rowBtns.forEach(b => { b.disabled = false; });
       alert('Error saving feedback: ' + e.message);
     }
   }
