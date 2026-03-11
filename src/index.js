@@ -36,7 +36,13 @@ async function main() {
   }
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+main()
+  .then(() => {
+    // Dashboard intentionally keeps the process alive; all other commands
+    // should exit cleanly even if stray handles (HTTP sockets, timers) remain.
+    if (command !== 'dashboard') process.exit(0);
+  })
+  .catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
