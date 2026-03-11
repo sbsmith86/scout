@@ -33,13 +33,28 @@ const REQUEST_DELAY_MS = 2000;
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
 /**
- * Build a deduplicated list of short search keywords from the profile's
- * work_types, focus_areas, and target_sectors.
+ * Build a deduplicated list of short search keywords from the profile.
+ *
+ * Prefers `profile.search_keywords` when present — these are curated
+ * nonprofit-facing terms (e.g. "Salesforce consultant", "CRM implementation")
+ * that match how organizations post opportunities on external sites.
+ *
+ * Falls back to deriving terms from work_types, focus_areas, and
+ * target_sectors when search_keywords is absent or empty.
  *
  * @param {object} profile
  * @returns {string[]}
  */
 function buildSearchTerms(profile) {
+  // Prefer the explicit search_keywords list when populated.
+  if (Array.isArray(profile.search_keywords) && profile.search_keywords.length > 0) {
+    const terms = profile.search_keywords
+      .filter((k) => k && typeof k === 'string')
+      .map((k) => k.trim())
+      .filter(Boolean);
+    if (terms.length > 0) return [...new Set(terms)].slice(0, MAX_SEARCH_TERMS);
+  }
+
   const terms = new Set();
 
   // work_types are the most targeted signal: "automation", "workflow implementation", …
