@@ -103,15 +103,23 @@ function createApp() {
       // On approval, create a Google Doc with the draft and write the link back.
       let draft_doc_link;
       if (status === 'approved') {
-        try {
-          const rows = await readOpportunities(null);
-          const item = rows.find((r) => r.id === id);
-          if (item) {
-            draft_doc_link = await exportDraft(item, 'opportunity');
-            await updateDraftDocLink('Opportunities', id, draft_doc_link);
+        const rows = await readOpportunities('approved');
+        const item = rows.find((r) => r.id === id);
+        if (item) {
+          let docLink;
+          try {
+            docLink = await exportDraft(item, 'opportunity');
+          } catch (exportErr) {
+            console.error(`[dashboard] Google Docs export failed for opportunity ${id}: ${exportErr.message}`);
           }
-        } catch (exportErr) {
-          console.error(`[dashboard] Google Docs export failed for opportunity ${id}: ${exportErr.message}`);
+          if (docLink) {
+            try {
+              await updateDraftDocLink('Opportunities', id, docLink);
+              draft_doc_link = docLink;
+            } catch (sheetsErr) {
+              console.error(`[dashboard] Updating draft_doc_link in Sheets failed for opportunity ${id}: ${sheetsErr.message}`);
+            }
+          }
         }
       }
 
@@ -133,15 +141,23 @@ function createApp() {
       // On approval, create a Google Doc with the draft and write the link back.
       let draft_doc_link;
       if (status === 'approved') {
-        try {
-          const rows = await readLeads(null);
-          const item = rows.find((r) => r.id === id);
-          if (item) {
-            draft_doc_link = await exportDraft(item, 'lead');
-            await updateDraftDocLink('Leads', id, draft_doc_link);
+        const rows = await readLeads('approved');
+        const item = rows.find((r) => r.id === id);
+        if (item) {
+          let docLink;
+          try {
+            docLink = await exportDraft(item, 'lead');
+          } catch (exportErr) {
+            console.error(`[dashboard] Google Docs export failed for lead ${id}: ${exportErr.message}`);
           }
-        } catch (exportErr) {
-          console.error(`[dashboard] Google Docs export failed for lead ${id}: ${exportErr.message}`);
+          if (docLink) {
+            try {
+              await updateDraftDocLink('Leads', id, docLink);
+              draft_doc_link = docLink;
+            } catch (sheetsErr) {
+              console.error(`[dashboard] Updating draft_doc_link in Sheets failed for lead ${id}: ${sheetsErr.message}`);
+            }
+          }
         }
       }
 
