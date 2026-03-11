@@ -377,6 +377,47 @@ async function updateDraftText(sheetName, id, draftText) {
   });
 }
 
+/**
+ * Updates the draft_doc_link of an existing row by finding the row with the given id.
+ * Scans column A for the id, then updates the draft_doc_link column in place.
+ *
+ * @param {'Opportunities'|'Leads'} sheetName
+ * @param {string} id
+ * @param {string} docLink  Google Docs URL for the exported draft
+ */
+async function updateDraftDocLink(sheetName, id, docLink) {
+  const sheets = await getSheetsClient();
+  const spreadsheetId = getSpreadsheetId();
+
+  const headers = sheetName === 'Opportunities' ? OPPORTUNITIES_HEADERS : LEADS_HEADERS;
+  const docLinkCol = headers.indexOf('draft_doc_link');
+  if (docLinkCol === -1) {
+    throw new Error(`No draft_doc_link column found in sheet: ${sheetName}`);
+  }
+
+  // Read column A (ids) to find the row number
+  const idRange = `${sheetName}!A:A`;
+  const idRes = await sheets.spreadsheets.values.get({ spreadsheetId, range: idRange });
+  const ids = (idRes.data.values || []).flat();
+  const rowIndex = ids.indexOf(id);
+
+  if (rowIndex === -1) {
+    throw new Error(`Row with id "${id}" not found in sheet: ${sheetName}`);
+  }
+
+  // Sheets rows are 1-indexed; rowIndex 0 is the header row
+  const rowNumber = rowIndex + 1;
+  const colLetter = columnLetter(docLinkCol);
+  const cellRange = `${sheetName}!${colLetter}${rowNumber}`;
+
+  await sheets.spreadsheets.values.update({
+    spreadsheetId,
+    range: cellRange,
+    valueInputOption: 'RAW',
+    requestBody: { values: [[docLink]] },
+  });
+}
+
 module.exports = {
   appendOpportunity,
   appendLead,
@@ -384,6 +425,7 @@ module.exports = {
   updateCorrectionFeedback,
   updateStatus,
   updateDraftText,
+  updateDraftDocLink,
   initializeHeaders,
   initializeAllHeaders,
   OPPORTUNITIES_HEADERS,

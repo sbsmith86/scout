@@ -7,10 +7,11 @@ const path = require('path');
 const SCOPES = [
   'https://www.googleapis.com/auth/spreadsheets',
   'https://www.googleapis.com/auth/drive.file',
+  'https://www.googleapis.com/auth/documents',
 ];
 
 /**
- * Returns an authenticated Google Sheets API client.
+ * Returns an authenticated GoogleAuth instance.
  *
  * Authentication is resolved in priority order:
  *
@@ -33,12 +34,10 @@ const SCOPES = [
  *     fields into env vars (Codespaces).
  *  4. Set GOOGLE_SHEETS_ID in .env to the spreadsheet ID from the Sheet URL.
  */
-async function getSheetsClient() {
+function createAuth() {
   const keyPath = process.env.GOOGLE_SERVICE_ACCOUNT_KEY_PATH;
   const clientEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
   const privateKey = process.env.GOOGLE_PRIVATE_KEY;
-
-  let auth;
 
   if (keyPath) {
     // ── Option 1: key file ────────────────────────────────────────────────
@@ -51,7 +50,7 @@ async function getSheetsClient() {
       );
     }
 
-    auth = new google.auth.GoogleAuth({
+    return new google.auth.GoogleAuth({
       keyFile: resolvedPath,
       scopes: SCOPES,
     });
@@ -61,7 +60,7 @@ async function getSheetsClient() {
     // normalise them to real newlines so the JWT library accepts the key.
     const normalizedKey = privateKey.replace(/\\n/g, '\n');
 
-    auth = new google.auth.GoogleAuth({
+    return new google.auth.GoogleAuth({
       credentials: {
         client_email: clientEmail,
         private_key: normalizedKey,
@@ -70,14 +69,36 @@ async function getSheetsClient() {
     });
   } else {
     throw new Error(
-      'Google Sheets credentials are not configured. Provide one of:\n' +
+      'Google credentials are not configured. Provide one of:\n' +
       '  • GOOGLE_SERVICE_ACCOUNT_KEY_PATH — path to a service account JSON key file (local dev)\n' +
       '  • GOOGLE_SERVICE_ACCOUNT_EMAIL + GOOGLE_PRIVATE_KEY — individual env vars (Codespaces)'
     );
   }
+}
 
+/**
+ * Returns an authenticated Google Sheets API client.
+ */
+async function getSheetsClient() {
+  const auth = createAuth();
   const sheets = google.sheets({ version: 'v4', auth });
   return sheets;
+}
+
+/**
+ * Returns an authenticated Google Docs API client.
+ */
+async function getDocsClient() {
+  const auth = createAuth();
+  return google.docs({ version: 'v1', auth });
+}
+
+/**
+ * Returns an authenticated Google Drive API client.
+ */
+async function getDriveClient() {
+  const auth = createAuth();
+  return google.drive({ version: 'v3', auth });
 }
 
 /**
@@ -95,5 +116,5 @@ function getSpreadsheetId() {
   return id;
 }
 
-module.exports = { getSheetsClient, getSpreadsheetId };
+module.exports = { getSheetsClient, getDocsClient, getDriveClient, getSpreadsheetId };
 

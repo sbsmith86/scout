@@ -20,7 +20,8 @@
 
 const express = require('express');
 const { randomUUID } = require('crypto');
-const { readOpportunities, readLeads, readCorrections, updateStatus, updateDraftText, appendCorrection, updateCorrectionFeedback } = require('../sheets');
+const { readOpportunities, readLeads, readCorrections, updateStatus, updateDraftText, updateDraftDocLink, appendCorrection, updateCorrectionFeedback } = require('../sheets');
+const { exportDraft } = require('../drafting');
 const { renderPage } = require('./template');
 
 const DEFAULT_PORT = process.env.PORT || 3000;
@@ -98,7 +99,31 @@ function createApp() {
     }
     try {
       await updateStatus('Opportunities', id, status);
-      res.json({ ok: true, id, status });
+
+      // On approval, create a Google Doc with the draft and write the link back.
+      let draft_doc_link;
+      if (status === 'approved') {
+        const rows = await readOpportunities('approved');
+        const item = rows.find((r) => r.id === id);
+        if (item) {
+          let docLink;
+          try {
+            docLink = await exportDraft(item, 'opportunity');
+          } catch (exportErr) {
+            console.error(`[dashboard] Google Docs export failed for opportunity ${id}: ${exportErr.message}`);
+          }
+          if (docLink) {
+            try {
+              await updateDraftDocLink('Opportunities', id, docLink);
+              draft_doc_link = docLink;
+            } catch (sheetsErr) {
+              console.error(`[dashboard] Updating draft_doc_link in Sheets failed for opportunity ${id}: ${sheetsErr.message}`);
+            }
+          }
+        }
+      }
+
+      res.json({ ok: true, id, status, ...(draft_doc_link ? { draft_doc_link } : {}) });
     } catch (err) {
       res.status(500).json({ error: err.message });
     }
@@ -112,7 +137,31 @@ function createApp() {
     }
     try {
       await updateStatus('Leads', id, status);
-      res.json({ ok: true, id, status });
+
+      // On approval, create a Google Doc with the draft and write the link back.
+      let draft_doc_link;
+      if (status === 'approved') {
+        const rows = await readLeads('approved');
+        const item = rows.find((r) => r.id === id);
+        if (item) {
+          let docLink;
+          try {
+            docLink = await exportDraft(item, 'lead');
+          } catch (exportErr) {
+            console.error(`[dashboard] Google Docs export failed for lead ${id}: ${exportErr.message}`);
+          }
+          if (docLink) {
+            try {
+              await updateDraftDocLink('Leads', id, docLink);
+              draft_doc_link = docLink;
+            } catch (sheetsErr) {
+              console.error(`[dashboard] Updating draft_doc_link in Sheets failed for lead ${id}: ${sheetsErr.message}`);
+            }
+          }
+        }
+      }
+
+      res.json({ ok: true, id, status, ...(draft_doc_link ? { draft_doc_link } : {}) });
     } catch (err) {
       res.status(500).json({ error: err.message });
     }
