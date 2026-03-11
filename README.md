@@ -84,7 +84,7 @@ Copy `config/profile.example.json` to `config/profile.json` and fill in every fi
 | `min_project_days` | Minimum engagement length in days |
 | `capacity` | `available`, `limited`, or `closed` — update before each run |
 
-The real `config/profile.json` is gitignored. Never commit it.
+The real `config/profile.json` is gitignored — it may contain NDA-protected client details in the `past_work` entries. Never commit it.
 
 ### Environment variables
 
