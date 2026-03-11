@@ -3,7 +3,7 @@
 /**
  * Idealist.org source plugin — Contract Finder (Agent 1).
  *
- * Scrapes the Idealist.org consulting-opportunities section, normalises each
+ * Scrapes https://www.idealist.org/en/consultant-org-jobs, normalises each
  * listing to the standard opportunity schema, and returns the array.
  *
  * Idealist renders search results via client-side JavaScript (React/Next.js),
