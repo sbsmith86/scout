@@ -19,7 +19,7 @@ const { chromium } = require('playwright');
 const cheerio = require('cheerio');
 
 const BASE_URL = 'https://www.idealist.org';
-const SEARCH_URL = `${BASE_URL}/en/all`;
+const SEARCH_URL = `${BASE_URL}/en/consultant-org-jobs`;
 
 /** Maximum pages to scrape per search term (polite ceiling). */
 const MAX_PAGES = 5;
@@ -101,10 +101,11 @@ function buildSearchTerms(profile) {
  *
  * @param {import('playwright').Page} page  An open Playwright Page instance.
  * @param {string} url                      The URL to navigate to.
- * @returns {Promise<{html: string, statusCode: number}>}
+ * @returns {Promise<{html: string, statusCode: number, contentType: string}>}
  */
 async function fetchPage(page, url) {
   let statusCode = 200;
+  let contentType = '';
 
   const response = await page.goto(url, {
     waitUntil: 'networkidle',
@@ -113,10 +114,11 @@ async function fetchPage(page, url) {
 
   if (response) {
     statusCode = response.status();
+    contentType = response.headers()['content-type'] || '';
   }
 
   const html = await page.content();
-  return { html, statusCode };
+  return { html, statusCode, contentType };
 }
 
 /** Returns a promise that resolves after `ms` milliseconds. */
@@ -442,15 +444,15 @@ module.exports = {
         let morePages = true;
 
         while (morePages && pageNum <= MAX_PAGES) {
-          const params = new URLSearchParams({ type: 'CONSULTING', q: term });
+          const params = new URLSearchParams({ q: term });
           if (pageNum > 1) params.set('page', String(pageNum));
 
           const pageUrl = `${SEARCH_URL}?${params.toString()}`;
           console.log(`[idealist] Fetching page ${pageNum} for "${term}": ${pageUrl}`);
 
-          let html, statusCode;
+          let html, statusCode, contentType;
           try {
-            ({ html, statusCode } = await fetchPage(page, pageUrl));
+            ({ html, statusCode, contentType } = await fetchPage(page, pageUrl));
           } catch (err) {
             console.warn(`[idealist] Request failed (${pageUrl}): ${err.name}: ${err.message}`);
             break;
@@ -474,7 +476,12 @@ module.exports = {
           }
 
           if (listings.length === 0) {
-            console.log(`[idealist] No listings on page ${pageNum} for "${term}" — stopping pagination`);
+            const hadNextData = nextData !== null;
+            console.warn(
+              `[idealist] WARN: 0 listings on page ${pageNum} for "${term}" — ` +
+              `url: ${pageUrl} | __NEXT_DATA__ found: ${hadNextData} | ` +
+              `content-type: ${contentType || 'unknown'} — stopping pagination`
+            );
             morePages = false;
           } else {
             let added = 0;
@@ -501,6 +508,13 @@ module.exports = {
       }
     } finally {
       await browser.close();
+    }
+
+    if (opportunities.length === 0) {
+      console.warn(
+        `[idealist] WARN: All ${searchTerms.length} search term(s) returned 0 results. ` +
+        'Check that the URL is correct and that Idealist.org is returning scrapable listings.'
+      );
     }
 
     console.log(`[idealist] Done — ${opportunities.length} total opportunities`);
