@@ -2,11 +2,11 @@
 
 // Foundation RSS feed source plugin for Agent 2 (Funding Monitor).
 //
-// Fetches grant announcement RSS/Atom feeds from major foundations and normalises
-// each item to the standard lead schema.  The *recipient* org — the nonprofit that
-// RECEIVED the grant — is extracted from the announcement text via a lightweight
-// heuristic pass first; when that is inconclusive the Claude API is called to
-// resolve it.
+// Fetches grant announcement RSS/Atom feeds from sector-specific and
+// tech-forward funders and normalises each item to the standard lead schema.
+// The *recipient* org — the nonprofit that RECEIVED the grant — is extracted
+// from the announcement text via a lightweight heuristic pass first; when that
+// is inconclusive the Claude API is called to resolve it.
 //
 // Critical distinction: HosTechnology does NOT apply for grants.  These entries
 // are warm outreach leads because a newly-funded org now has capacity dollars to
@@ -14,6 +14,7 @@
 
 const RSSParser = require('rss-parser');
 const https = require('https');
+const http = require('http');
 const crypto = require('crypto');
 
 // ---------------------------------------------------------------------------
@@ -21,40 +22,56 @@ const crypto = require('crypto');
 // anything else in the pipeline.
 //
 // Source selection rationale:
-//   • PND (Philanthropy News Digest) is the gold-standard aggregator for grant
-//     award announcements.  Each item reports a specific grant — recipient org,
-//     funder, amount, and purpose — exactly the signal the Funding Monitor needs.
-//   • MacArthur Foundation publishes a dedicated grants RSS that lists individual
-//     grants awarded (distinct from their general news blog).
-//   • Hewlett Foundation's /grants/ category feed surfaces grant announcements
-//     rather than the general /feed/ blog posts that caused false negatives in
-//     the previous configuration.
+//   • Borealis Philanthropy funds racial justice orgs (a core HosTech target
+//     sector).  Small-to-mid orgs that receive Borealis grants typically lack
+//     tech capacity — exactly HosTech's market.
+//   • Astraea Foundation is one of the largest LGBTQ+-specific funders.  Grantee
+//     orgs are small and grassroots — prime warm-lead territory.
+//   • Knight Foundation funds civic/community tech at the local level, surfacing
+//     newly-funded orgs that are explicitly building tech capacity.
+//   • Mozilla Foundation awards grants for open-web and digital-equity work,
+//     frequently to nonprofits and grassroots orgs without in-house tech staff.
 //
 // Feeds that were removed:
-//   • fordfoundation.org/news-and-stories/feed/ — returned 0 items (feed appears
-//     broken / redirected after a CMS migration).
-//   • hewlett.org/feed/ — returned only general blog posts, not grant awards.
+//   • philanthropynewsdigest.org/feeds/grants — 301 redirect to HTML blog page.
+//   • macfound.org/feeds/grants/ — redirect chain, grants-specific feed broken.
+//   • hewlett.org/grants/feed/ — returns HTML webpage, not RSS/Atom XML.
+//
+// Validation criteria for any new feed:
+//   • HTTP 200 (no redirect chains)
+//   • Content-Type: application/rss+xml, application/atom+xml, or text/xml
+//   • Response body starts with <?xml, <rss, or <feed  (not <html)
+//   • rss-parser returns >0 items
+//   • Items are grant award announcements, not general blog posts
 // ---------------------------------------------------------------------------
 const FEEDS = [
   {
-    // Primary aggregator — reports grants from hundreds of foundations in a
-    // consistent format: "Foundation Awards $X to OrgName for Purpose"
-    id: 'pnd-grants',
-    name: 'Philanthropy News Digest (Candid)',
-    url: 'https://philanthropynewsdigest.org/feeds/grants',
+    // Borealis Philanthropy — racial-justice funder; announcements describe
+    // individual grants awarded to grassroots orgs.
+    id: 'borealis-philanthropy',
+    name: 'Borealis Philanthropy',
+    url: 'https://borealisphilanthropy.org/feed/',
   },
   {
-    // MacArthur Foundation grants-specific RSS (separate from their news blog)
-    id: 'macarthur-grants',
-    name: 'MacArthur Foundation Grants',
-    url: 'https://www.macfound.org/feeds/grants/',
+    // Astraea Foundation for Justice — LGBTQ+-specific global funder.
+    // Grantee orgs are small and typically have no dedicated tech staff.
+    id: 'astraea-foundation',
+    name: 'Astraea Foundation',
+    url: 'https://astraeafoundation.org/feed/',
   },
   {
-    // Hewlett Foundation grants category — WordPress category feed, not the
-    // general /feed/ which returns editorial blog posts
-    id: 'hewlett-grants',
-    name: 'Hewlett Foundation Grants',
-    url: 'https://hewlett.org/grants/feed/',
+    // Knight Foundation — civic/community-tech funder; grants frequently go to
+    // local nonprofits building digital capacity who need outside tech help.
+    id: 'knight-foundation',
+    name: 'Knight Foundation',
+    url: 'https://knightfoundation.org/feed/',
+  },
+  {
+    // Mozilla Foundation — open-web and digital-equity grants; grantees are
+    // often small nonprofits or projects without in-house tech teams.
+    id: 'mozilla-foundation',
+    name: 'Mozilla Foundation',
+    url: 'https://foundation.mozilla.org/en/blog/feed/rss/',
   },
 ];
 
@@ -215,19 +232,130 @@ If you cannot determine the recipient with confidence, return exactly: unknown`;
   });
 }
 
+// Content-type values that indicate genuine RSS/Atom XML.
+const XML_CONTENT_TYPES = [
+  'application/rss+xml',
+  'application/atom+xml',
+  'application/xml',
+  'text/xml',
+];
+
+/**
+ * Perform a raw HTTP(S) GET and return `{ statusCode, contentType, body }`.
+ * Follows up to one redirect (301/302) so transient CDN hops don't fail the
+ * check, but logs a warning so persistent redirect chains are visible.
+ *
+ * @param {string} url
+ * @returns {Promise<{statusCode: number, contentType: string, body: string}>}
+ */
+function fetchRaw(url) {
+  return new Promise((resolve, reject) => {
+    const lib = url.startsWith('https') ? https : http;
+    const req = lib.get(
+      url,
+      { headers: { 'User-Agent': 'Scout/0.1 (HosTechnology business-dev bot)' }, timeout: 15000 },
+      (res) => {
+        // Follow a single redirect.
+        if ((res.statusCode === 301 || res.statusCode === 302) && res.headers.location) {
+          console.warn(
+            `[foundation-rss] WARNING: Feed URL redirected (HTTP ${res.statusCode}) → ${res.headers.location}`
+          );
+          res.resume(); // drain the socket
+          fetchRaw(res.headers.location).then(resolve).catch(reject);
+          return;
+        }
+
+        let body = '';
+        res.on('data', (chunk) => { body += chunk; });
+        res.on('end', () => {
+          resolve({
+            statusCode: res.statusCode,
+            contentType: res.headers['content-type'] || '',
+            body,
+          });
+        });
+      }
+    );
+
+    req.on('error', reject);
+    req.on('timeout', () => {
+      req.destroy();
+      reject(new Error('Request timed out after 15 s'));
+    });
+  });
+}
+
 /**
  * Fetch a single RSS/Atom feed and return an array of normalised lead objects.
+ * Performs health checks on the raw HTTP response before attempting to parse,
+ * and logs WARNING-level diagnostics when the response looks unexpected.
  */
 async function fetchFeed(feed, parser) {
+  // ── 1. Raw fetch with health checks ────────────────────────────────────────
+  let rawResponse;
+  try {
+    rawResponse = await fetchRaw(feed.url);
+  } catch (err) {
+    console.warn(
+      `[foundation-rss] WARNING: Failed to fetch feed "${feed.name}" (${feed.url}): ${err.message}`
+    );
+    return [];
+  }
+
+  const { statusCode, contentType, body } = rawResponse;
+  const trimmedBody = body.trimStart();
+  const bodySnippet = trimmedBody.slice(0, 120).replace(/\n/g, ' ');
+  const looksLikeXml = trimmedBody.startsWith('<?xml') || trimmedBody.startsWith('<rss') || trimmedBody.startsWith('<feed');
+  const looksLikeHtml = trimmedBody.toLowerCase().startsWith('<html') || trimmedBody.toLowerCase().startsWith('<!doctype');
+
+  if (statusCode !== 200) {
+    console.warn(
+      `[foundation-rss] WARNING: Feed "${feed.name}" returned HTTP ${statusCode} ` +
+      `(expected 200). Content-Type: "${contentType}". ` +
+      `Body starts with: ${looksLikeXml ? '<?xml' : looksLikeHtml ? '<html' : `"${bodySnippet}"`}`
+    );
+  }
+
+  const hasXmlContentType = XML_CONTENT_TYPES.some((ct) => contentType.includes(ct));
+  if (!hasXmlContentType) {
+    console.warn(
+      `[foundation-rss] WARNING: Feed "${feed.name}" content-type is ` +
+      `"${contentType.split(';')[0].trim()}" (expected an XML type such as application/rss+xml).`
+    );
+  }
+
+  if (looksLikeHtml) {
+    console.warn(
+      `[foundation-rss] WARNING: Feed "${feed.name}" body starts with HTML, not XML — ` +
+      `skipping parse. HTTP ${statusCode}, content-type: "${contentType}". ` +
+      `Body start: ${bodySnippet}`
+    );
+    return [];
+  }
+
+  // ── 2. Parse ────────────────────────────────────────────────────────────────
   let parsed;
   try {
-    parsed = await parser.parseURL(feed.url);
+    parsed = await parser.parseString(body);
   } catch (err) {
-    console.error(`[foundation-rss] Failed to fetch feed "${feed.name}" (${feed.url}): ${err.message}`);
+    console.warn(
+      `[foundation-rss] WARNING: Failed to parse feed "${feed.name}": ${err.message}. ` +
+      `HTTP ${statusCode}, content-type: "${contentType}". ` +
+      `Body starts with: ${looksLikeXml ? '<?xml' : looksLikeHtml ? '<html' : `"${bodySnippet}"`}`
+    );
     return [];
   }
 
   const items = parsed.items || [];
+
+  if (items.length === 0) {
+    console.warn(
+      `[foundation-rss] WARNING: Feed "${feed.name}" returned 0 items after parse. ` +
+      `HTTP ${statusCode}, content-type: "${contentType}". ` +
+      `Body starts with: ${looksLikeXml ? '<?xml' : looksLikeHtml ? '<html' : `"${bodySnippet}"`}`
+    );
+  }
+
   const leads = [];
 
   for (const item of items) {
