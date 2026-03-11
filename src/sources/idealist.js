@@ -476,11 +476,13 @@ module.exports = {
           }
 
           if (listings.length === 0) {
-            const hadNextData = nextData !== null;
+            const hadNextDataTag = $('#__NEXT_DATA__').length > 0;
+            const nextDataParsed = nextData !== null;
             console.warn(
               `[idealist] WARN: 0 listings on page ${pageNum} for "${term}" — ` +
-              `url: ${pageUrl} | __NEXT_DATA__ found: ${hadNextData} | ` +
-              `content-type: ${contentType || 'unknown'} — stopping pagination`
+              `url: ${pageUrl} | __NEXT_DATA__ tag present: ${hadNextDataTag} | ` +
+              `__NEXT_DATA__ parsed: ${nextDataParsed} | content-type: ${contentType || 'unknown'} ` +
+              '— stopping pagination'
             );
             morePages = false;
           } else {
