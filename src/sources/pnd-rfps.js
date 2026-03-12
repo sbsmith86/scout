@@ -17,7 +17,6 @@
  */
 
 const https = require('https');
-const http = require('http');
 const cheerio = require('cheerio');
 const crypto = require('crypto');
 
@@ -52,7 +51,7 @@ function makeId(url) {
 /**
  * Perform a raw HTTPS GET and return `{ statusCode, contentType, body }`.
  * Follows up to `redirectsRemaining` redirects (default 2) to handle
- * transient CDN hops.
+ * transient CDN hops.  Targets HTTPS only — PND has no HTTP fallback.
  *
  * @param {string} url
  * @param {number} [redirectsRemaining=2]
@@ -60,8 +59,7 @@ function makeId(url) {
  */
 function fetchRaw(url, redirectsRemaining = 2) {
   return new Promise((resolve, reject) => {
-    const lib = url.startsWith('https') ? https : http;
-    const req = lib.get(
+    const req = https.get(
       url,
       {
         headers: {
