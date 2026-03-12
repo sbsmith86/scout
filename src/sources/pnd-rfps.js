@@ -26,8 +26,11 @@ const RFPS_URL = `${BASE_URL}/rfps`;
 /** Maximum pages to scrape per run (polite ceiling). */
 const MAX_PAGES = 5;
 
-/** Polite delay between page requests (ms). */
-const REQUEST_DELAY_MS = 1500;
+/** Polite delay between page requests (ms). Configurable via env var. */
+const REQUEST_DELAY_MS = (() => {
+  const fromEnv = Number(process.env.PND_RFPS_REQUEST_DELAY_MS);
+  return Number.isFinite(fromEnv) && fromEnv > 0 ? fromEnv : 2000;
+})();
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -36,15 +39,39 @@ function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/** Zero-pads a number to 2 digits. */
+function pad2(num) {
+  return num.toString().padStart(2, '0');
+}
+
+/** Month-name → 1-based integer map used by parseDeadline(). */
+const MONTH_NAMES = {
+  january: 1, jan: 1,
+  february: 2, feb: 2,
+  march: 3, mar: 3,
+  april: 4, apr: 4,
+  may: 5,
+  june: 6, jun: 6,
+  july: 7, jul: 7,
+  august: 8, aug: 8,
+  september: 9, sept: 9, sep: 9,
+  october: 10, oct: 10,
+  november: 11, nov: 11,
+  december: 12, dec: 12,
+};
+
 /**
  * Deterministic ID derived from the listing URL so that re-runs never create
  * duplicate rows in Google Sheets.
+ *
+ * If `url` is missing or empty, falls back to a stable placeholder based on
+ * the RFPS index URL instead of randomness, so IDs remain deterministic.
  *
  * @param {string} url
  * @returns {string}
  */
 function makeId(url) {
-  const key = url && url.length > 0 ? url : crypto.randomBytes(8).toString('hex');
+  const key = url && url.length > 0 ? url : `${RFPS_URL}#missing-url`;
   return `pnd-rfps-${crypto.createHash('md5').update(key).digest('hex').slice(0, 10)}`;
 }
 
@@ -111,6 +138,10 @@ function fetchRaw(url, redirectsRemaining = 2) {
  * PND typically uses formats like "March 31, 2025" or "03/31/2025".
  * Returns null if parsing fails.
  *
+ * Parses directly to year/month/day integers to avoid timezone-induced date
+ * shifts that occur when `new Date(string).toISOString()` converts a local
+ * parse result back to UTC.
+ *
  * @param {string} raw
  * @returns {string|null}
  */
@@ -118,8 +149,36 @@ function parseDeadline(raw) {
   if (!raw) return null;
   const cleaned = raw.replace(/deadline:?\s*/i, '').trim();
   if (!cleaned) return null;
-  const d = new Date(cleaned);
-  if (!isNaN(d.getTime())) return d.toISOString().slice(0, 10);
+
+  const value = cleaned.replace(/\s+/g, ' ').trim();
+
+  // Match named-month formats: "March 31, 2025" or "Mar 31 2025".
+  const monthNameMatch = value.match(/^([A-Za-z.]+)\s+(\d{1,2}),?\s+(\d{2,4})$/);
+  if (monthNameMatch) {
+    const monthKey = monthNameMatch[1].replace(/\./g, '').toLowerCase();
+    const month = MONTH_NAMES[monthKey];
+    const day = parseInt(monthNameMatch[2], 10);
+    let year = parseInt(monthNameMatch[3], 10);
+    if (!month || day < 1 || day > 31) return null;
+    if (year < 100) year += 2000;
+    return `${year}-${pad2(month)}-${pad2(day)}`;
+  }
+
+  // Match numeric formats: "03/31/2025" or "3-31-2025".
+  const numericMatch = value.match(/^(\d{1,2})[/\-](\d{1,2})[/\-](\d{2,4})$/);
+  if (numericMatch) {
+    const month = parseInt(numericMatch[1], 10);
+    const day = parseInt(numericMatch[2], 10);
+    let year = parseInt(numericMatch[3], 10);
+    if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+    if (year < 100) year += 2000;
+    return `${year}-${pad2(month)}-${pad2(day)}`;
+  }
+
+  // Match ISO format already: "2025-03-31".
+  const isoMatch = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (isoMatch) return value;
+
   return null;
 }
 
@@ -242,6 +301,16 @@ function parseListings($) {
     if (!title || !href) return; // skip malformed cards
 
     const url = href.startsWith('http') ? href : `${BASE_URL}${href}`;
+
+    // Only accept links that point to an RFP listing (path starts with /rfps/).
+    // This prevents non-RFP articles/links from slipping through when generic
+    // fallback card selectors are active.
+    try {
+      const parsed = new URL(url);
+      if (!parsed.pathname.startsWith('/rfps/')) return;
+    } catch {
+      return; // skip unparsable URLs
+    }
 
     // ── Organisation ─────────────────────────────────────────────────────
     const orgSelectors = [
