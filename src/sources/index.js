@@ -5,8 +5,10 @@
 
 const idealist = require('./idealist');
 const foundationRss = require('./foundation-rss');
+const pndRfps = require('./pnd-rfps');
 
 module.exports = {
   idealist,
   foundationRss,
+  pndRfps,
 };
