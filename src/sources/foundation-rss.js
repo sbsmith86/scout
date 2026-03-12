@@ -242,26 +242,50 @@ const XML_CONTENT_TYPES = [
 
 /**
  * Perform a raw HTTP(S) GET and return `{ statusCode, contentType, body }`.
- * Follows up to one redirect (301/302) so transient CDN hops don't fail the
- * check, but logs a warning so persistent redirect chains are visible.
+ * Follows up to `redirectsRemaining` redirects (default: 1) so transient CDN
+ * hops don't fail the check, but logs a warning so redirect chains are visible.
+ * `Location` headers are resolved against the current URL so relative and
+ * protocol-relative values are handled correctly.
  *
  * @param {string} url
+ * @param {number} [redirectsRemaining=1] - How many redirects may still be followed.
  * @returns {Promise<{statusCode: number, contentType: string, body: string}>}
  */
-function fetchRaw(url) {
+function fetchRaw(url, redirectsRemaining = 1) {
   return new Promise((resolve, reject) => {
     const lib = url.startsWith('https') ? https : http;
     const req = lib.get(
       url,
       { headers: { 'User-Agent': 'Scout/0.1 (HosTechnology business-dev bot)' }, timeout: 15000 },
       (res) => {
-        // Follow a single redirect.
+        // Follow redirects up to the configured limit.
         if ((res.statusCode === 301 || res.statusCode === 302) && res.headers.location) {
           console.warn(
             `[foundation-rss] WARNING: Feed URL redirected (HTTP ${res.statusCode}) → ${res.headers.location}`
           );
           res.resume(); // drain the socket
-          fetchRaw(res.headers.location).then(resolve).catch(reject);
+
+          if (redirectsRemaining <= 0) {
+            console.warn(
+              '[foundation-rss] WARNING: Redirect limit reached; not following further redirects.'
+            );
+            resolve({
+              statusCode: res.statusCode,
+              contentType: res.headers['content-type'] || '',
+              body: '',
+            });
+            return;
+          }
+
+          let redirectUrl;
+          try {
+            redirectUrl = new URL(res.headers.location, url).toString();
+          } catch (e) {
+            reject(e);
+            return;
+          }
+
+          fetchRaw(redirectUrl, redirectsRemaining - 1).then(resolve).catch(reject);
           return;
         }
 
@@ -316,7 +340,7 @@ async function fetchFeed(feed, parser) {
     );
   }
 
-  const hasXmlContentType = XML_CONTENT_TYPES.some((ct) => contentType.includes(ct));
+  const hasXmlContentType = XML_CONTENT_TYPES.some((ct) => contentType.toLowerCase().includes(ct));
   if (!hasXmlContentType) {
     console.warn(
       `[foundation-rss] WARNING: Feed "${feed.name}" content-type is ` +
