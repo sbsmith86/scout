@@ -440,7 +440,19 @@ async function fetchViaScrape() {
   // Build the set of URLs seen on the nonprofit issuer page so we can
   // intersect (filter) the technology results to nonprofit-only.
   const nonprofitUrls = await fetchNonprofitUrls();
-  console.log(`[rfpdb] Scraped ${nonprofitUrls.size} nonprofit RFP URL(s) for intersection filter`);
+
+  // Treat an empty or missing nonprofit URL set as a hard stop so we never
+  // silently broaden to "all technology" listings if the issuer scrape fails.
+  if (!nonprofitUrls || nonprofitUrls.size === 0) {
+    console.warn(
+      '[rfpdb] Nonprofit URL set is empty; aborting scrape to avoid returning non-targeted listings'
+    );
+    return [];
+  }
+
+  console.log(
+    `[rfpdb] Scraped ${nonprofitUrls.size} nonprofit RFP URL(s) for intersection filter`
+  );
 
   const opportunities = [];
   const seen = new Set();
