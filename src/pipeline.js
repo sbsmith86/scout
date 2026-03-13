@@ -320,9 +320,10 @@ async function runPipeline(options = {}) {
   const sourceErrors = [];
 
   for (const plugin of allPlugins) {
-    // Respect per-source fetch intervals — skip plugins whose interval has
-    // not yet elapsed since their last successful run.
-    if (!intervalElapsed(plugin, sourceRuns)) {
+    // Respect per-source fetch intervals for real runs — skip plugins whose
+    // interval has not yet elapsed since their last successful run. In
+    // fetchOnly/preview mode, always attempt to fetch from all sources.
+    if (!fetchOnly && !intervalElapsed(plugin, sourceRuns)) {
       const interval = plugin.interval || 'weekly';
       const lastRun = sourceRuns[plugin.id];
       console.log(
