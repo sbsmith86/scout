@@ -91,13 +91,62 @@ const MONTH_NAMES = {
 };
 
 /**
+ * Canonicalize RFPDB URLs so that host/format differences don't change IDs.
+ *
+ * Normalization rules:
+ *   - Ensure an https:// scheme.
+ *   - Lowercase hostname and strip leading "www.".
+ *   - Drop query string and fragment.
+ *   - Remove trailing slash on non-root paths.
+ *
+ * On parse failure, returns the original string.
+ *
+ * @param {string} raw
+ * @returns {string}
+ */
+function canonicalizeUrl(raw) {
+  if (!raw || typeof raw !== 'string') {
+    return '';
+  }
+  let urlStr = raw.trim();
+  if (!/^https?:\/\//i.test(urlStr)) {
+    urlStr = `https://${urlStr}`;
+  }
+  let parsed;
+  try {
+    parsed = new URL(urlStr);
+  } catch {
+    // If parsing fails, fall back to the raw string to avoid breaking callers.
+    return raw;
+  }
+
+  // Force https and normalize hostname.
+  parsed.protocol = 'https:';
+  parsed.hostname = parsed.hostname.replace(/^www\./i, '').toLowerCase();
+
+  // Drop query and fragment.
+  parsed.search = '';
+  parsed.hash = '';
+
+  // Normalize trailing slash for non-root paths.
+  if (parsed.pathname !== '/' && parsed.pathname.endsWith('/')) {
+    parsed.pathname = parsed.pathname.slice(0, -1);
+  }
+
+  return parsed.toString();
+}
+
+/**
  * Deterministic ID derived from the listing URL.
  *
  * @param {string} url
  * @returns {string}
  */
 function makeId(url) {
-  const key = url && url.length > 0 ? url : `${TECH_CATEGORY_URL}#missing-url`;
+  const key =
+    url && url.length > 0
+      ? canonicalizeUrl(url)
+      : `${TECH_CATEGORY_URL}#missing-url`;
   return `rfpdb-${crypto.createHash('md5').update(key).digest('hex').slice(0, 10)}`;
 }
 
