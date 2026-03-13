@@ -203,35 +203,41 @@ function printSummary(summary) {
  * @returns {Promise<object>} Run summary with counts and any source errors.
  */
 async function runPipeline(options = {}) {
-  const { fetchOnly = false } = options;
+  const { fetchOnly = false, healthCheck = false } = options;
 
   // ── 1. Load profile ────────────────────────────────────────────────────────
   console.log('[pipeline] Loading profile...');
   const profile = loadProfile();
   console.log(`[pipeline] Profile loaded: ${profile.practice_name || 'HosTechnology'}`);
 
-  // ── 1a. Lightweight source health checks (non-blocking) ───────────────────
+  // ── 1a. Optional lightweight source health checks (non-blocking) ─────────
   // Warn about degraded sources before fetching so failures are immediately
   // visible.  A failing health check does NOT stop the run — the full fetch
   // will still attempt all sources.
-  console.log('[pipeline] Running source health checks...');
-  try {
-    const healthResults = await runHealthChecks();
-    const failed = healthResults.filter((r) => !r.pass);
-    if (failed.length > 0) {
-      for (const r of failed) {
-        console.warn(`[pipeline] ⚠ Source health warning — ${r.name}: ${r.reason}`);
+  if (healthCheck) {
+    console.log('[pipeline] Running source health checks...');
+    try {
+      const healthResults = await runHealthChecks();
+      const failed = healthResults.filter((r) => !r.pass);
+      if (failed.length > 0) {
+        for (const r of failed) {
+          console.warn(
+            `[pipeline] ⚠ Source health warning — ${r.name}: ${r.reason}`
+          );
+        }
+        console.warn(
+          `[pipeline] ${failed.length}/${healthResults.length} source(s) may be degraded. ` +
+          'Run `scout check` for a full health report.'
+        );
+      } else {
+        console.log(`[pipeline] All ${healthResults.length} source(s) healthy.`);
       }
+    } catch (err) {
+      // Health checks are best-effort; never abort the pipeline over them.
       console.warn(
-        `[pipeline] ${failed.length}/${healthResults.length} source(s) may be degraded. ` +
-        'Run `scout check` for a full health report.'
+        `[pipeline] Health check error (non-fatal): ${err.message}`
       );
-    } else {
-      console.log(`[pipeline] All ${healthResults.length} source(s) healthy.`);
     }
-  } catch (err) {
-    // Health checks are best-effort; never abort the pipeline over them.
-    console.warn(`[pipeline] Health check error (non-fatal): ${err.message}`);
   }
 
   // ── 2. Fetch from all source plugins ──────────────────────────────────────
