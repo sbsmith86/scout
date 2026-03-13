@@ -21,7 +21,6 @@
  */
 
 const https = require('https');
-const http = require('http');
 const crypto = require('crypto');
 const cheerio = require('cheerio');
 const RSSParser = require('rss-parser');
@@ -166,8 +165,9 @@ function parseDeadline(raw) {
 }
 
 /**
- * Raw HTTP/HTTPS GET — returns `{ statusCode, contentType, body }`.
- * Follows up to `redirectsRemaining` redirects (HTTPS only after first hop).
+ * Perform a raw HTTPS GET and return `{ statusCode, contentType, body }`.
+ * Follows up to `redirectsRemaining` redirects.  Targets HTTPS only — RFPDB
+ * has no plain-HTTP fallback.
  *
  * @param {string} url
  * @param {number} [redirectsRemaining=3]
@@ -175,17 +175,7 @@ function parseDeadline(raw) {
  */
 function fetchRaw(url, redirectsRemaining = 3) {
   return new Promise((resolve, reject) => {
-    let parsedUrl;
-    try {
-      parsedUrl = new URL(url);
-    } catch (e) {
-      reject(new Error(`Invalid URL: ${url}`));
-      return;
-    }
-
-    const transport = parsedUrl.protocol === 'https:' ? https : http;
-
-    const req = transport.get(
+    const req = https.get(
       url,
       {
         headers: {
