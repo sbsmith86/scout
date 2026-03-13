@@ -370,8 +370,8 @@ const propublicaPlugin = {
         while (next < orgs.length) {
           const idx = next++;
           const org = orgs[idx];
-          const ein = normalizeEin(org.ein || org.strein || '');
-          results[idx] = ein ? await fetchOrgDetail(ein) : null;
+          const rawEin = org.ein || org.strein || '';
+          results[idx] = rawEin ? await fetchOrgDetail(rawEin) : null;
         }
       }
 
