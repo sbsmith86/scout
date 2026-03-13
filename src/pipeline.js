@@ -35,8 +35,72 @@ const { runHealthChecks } = require('./health-check');
 
 const PROFILE_PATH = path.join(__dirname, '..', 'config', 'profile.json');
 
+/** Persists the last-successful-fetch timestamp per source plugin. */
+const SOURCE_RUNS_PATH = path.join(__dirname, '..', 'config', 'source-runs.json');
+
 /** Maximum characters used from the title when building a fallback dedupe key. */
 const MAX_TITLE_SLUG_LENGTH = 60;
+
+// ── Per-source interval tracking ─────────────────────────────────────────────
+
+/** Milliseconds per named interval. */
+const INTERVAL_MS = {
+  weekly: 7 * 24 * 60 * 60 * 1000,
+  monthly: 30 * 24 * 60 * 60 * 1000,
+};
+
+/**
+ * Load the source-runs state file, returning an empty object when it does not
+ * yet exist or cannot be parsed.
+ *
+ * @returns {object}  Map of source id → ISO timestamp of last successful run.
+ */
+function loadSourceRuns() {
+  try {
+    if (fs.existsSync(SOURCE_RUNS_PATH)) {
+      return JSON.parse(fs.readFileSync(SOURCE_RUNS_PATH, 'utf8'));
+    }
+  } catch (err) {
+    console.warn(`[pipeline] Could not read source-runs file: ${err.message}`);
+  }
+  return {};
+}
+
+/**
+ * Persist an updated source-runs map to disk.  Errors are non-fatal — a
+ * missing state file just means the source will run again next time.
+ *
+ * @param {object} runs
+ */
+function saveSourceRuns(runs) {
+  try {
+    fs.writeFileSync(SOURCE_RUNS_PATH, JSON.stringify(runs, null, 2), 'utf8');
+  } catch (err) {
+    console.warn(`[pipeline] Could not save source-runs file: ${err.message}`);
+  }
+}
+
+/**
+ * Return true if the plugin's fetch interval has elapsed since its last run
+ * (or if no last-run record exists).  Plugins without an `interval` field are
+ * treated as 'weekly'.
+ *
+ * @param {object} plugin   Source plugin object.
+ * @param {object} runs     Current source-runs state map.
+ * @returns {boolean}
+ */
+function intervalElapsed(plugin, runs) {
+  const interval = plugin.interval || 'weekly';
+  let intervalMs = INTERVAL_MS[interval];
+  if (!intervalMs) {
+    console.warn(`[pipeline] Unknown interval "${interval}" for "${plugin.id}" — using weekly`);
+    intervalMs = INTERVAL_MS.weekly;
+  }
+  const lastRun = runs[plugin.id];
+  if (!lastRun) return true; // never run before
+  const elapsed = Date.now() - new Date(lastRun).getTime();
+  return elapsed >= intervalMs;
+}
 
 // ── Profile loading ───────────────────────────────────────────────────────────
 
@@ -244,21 +308,43 @@ async function runPipeline(options = {}) {
   const allPlugins = Object.values(sources);
   console.log(`[pipeline] Running ${allPlugins.length} source plugin(s)...`);
 
+  const sourceRuns = loadSourceRuns();
   const allItems = [];
   const sourceErrors = [];
 
   for (const plugin of allPlugins) {
+    // Respect per-source fetch intervals — skip plugins whose interval has
+    // not yet elapsed since their last successful run.
+    if (!intervalElapsed(plugin, sourceRuns)) {
+      const interval = plugin.interval || 'weekly';
+      const lastRun = sourceRuns[plugin.id];
+      console.log(
+        `[pipeline] → ${plugin.name} (${plugin.id}) — skipped ` +
+        `(interval: ${interval}, last run: ${lastRun})`
+      );
+      continue;
+    }
+
     console.log(`[pipeline] → ${plugin.name} (${plugin.id})`);
     try {
       const items = await plugin.fetch(profile);
       console.log(`[pipeline]   ${plugin.name}: ${items.length} item(s) fetched`);
       allItems.push(...items);
+      // Record successful run immediately after fetch completes.  Recording
+      // here (rather than at end of pipeline) means the interval resets even
+      // if downstream scoring or Sheets writes fail — the raw data was
+      // successfully fetched and the same results would be returned again next
+      // time, so re-fetching before the interval elapses adds no value.
+      sourceRuns[plugin.id] = new Date().toISOString();
     } catch (err) {
       // One source failing must not stop the run.
       console.error(`[pipeline]   ✗ "${plugin.name}" failed: ${err.message}`);
       sourceErrors.push({ source: plugin.id, error: err.message });
     }
   }
+
+  // Persist updated run timestamps (best-effort; non-fatal on failure).
+  saveSourceRuns(sourceRuns);
 
   console.log(`[pipeline] Total fetched (pre-dedupe): ${allItems.length}`);
 
@@ -413,4 +499,4 @@ async function runPipeline(options = {}) {
   return summary;
 }
 
-module.exports = { runPipeline, loadProfile };
+module.exports = { runPipeline, loadProfile, intervalElapsed, loadSourceRuns, saveSourceRuns };
