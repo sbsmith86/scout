@@ -37,6 +37,25 @@ const crypto = require('crypto');
 //   • macfound.org/feeds/grants/ — redirect chain, grants-specific feed broken.
 //   • hewlett.org/grants/feed/ — returns HTML webpage, not RSS/Atom XML.
 //
+// Investigated but not adopted:
+//   • Candid Social Sector News API (developer.candid.org) — investigated as a
+//     potential primary Funding Monitor source that could replace broken feeds.
+//     Two blockers ruled it out:
+//       1. No free tier.  The News API costs $3,300/year (~$275/month), well
+//          above the ~$50/month affordability threshold for this project.  The
+//          Grants API (which provides structured recipient/funder/amount data)
+//          costs $6,000/year (~$500/month).  Only the Demographics and Taxonomy
+//          APIs are free, and neither surfaces grant award leads.
+//       2. Data is article-level, not structured.  The News API (/news/v1/search)
+//          returns article headlines, summaries, and links — the same kind of
+//          content already obtained via RSS feeds.  Extracting recipient org,
+//          funder, and amount still requires the Claude parsing step.  Structured
+//          grant data (recipient, funder, amount) requires the Grants API, which
+//          is even more expensive.
+//     Decision: closed investigation; continue with free RSS feeds (this plugin)
+//     and ProPublica Nonprofit API (see issue #46) as primary Funding Monitor
+//     sources.
+//
 // Validation criteria for any new feed:
 //   • HTTP 200 (no redirect chains)
 //   • Content-Type: application/rss+xml, application/atom+xml, or text/xml
