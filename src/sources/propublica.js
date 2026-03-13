@@ -353,16 +353,44 @@ const propublicaPlugin = {
 
     console.log(`[propublica] ${candidates.length} candidate org(s) with recent filings`);
 
+    /**
+     * Fetch org details concurrently with a small pool to avoid hammering the
+     * API sequentially.  With MAX_ORGS_PER_NTEE=25 and up to 6 NTEE codes
+     * there can be ~150 candidates; sequential fetching would be very slow and
+     * risks rate-limiting.  A concurrency of 4 keeps throughput high while
+     * remaining polite to the upstream API.
+     */
+    const DETAIL_CONCURRENCY = 4;
+
+    async function pooledDetailFetch(orgs) {
+      const results = new Array(orgs.length);
+      let next = 0;
+
+      async function worker() {
+        while (next < orgs.length) {
+          const idx = next++;
+          const org = orgs[idx];
+          const rawEin = org.ein || org.strein || '';
+          results[idx] = rawEin ? await fetchOrgDetail(rawEin) : null;
+        }
+      }
+
+      const workers = Array.from({ length: DETAIL_CONCURRENCY }, () => worker());
+      await Promise.all(workers);
+      return results;
+    }
+
+    const details = await pooledDetailFetch(candidates);
+
     const leads = [];
 
-    for (const org of candidates) {
+    for (let i = 0; i < candidates.length; i++) {
+      const org = candidates[i];
+      const detail = details[i];
       const ein = normalizeEin(org.ein || org.strein || '');
       const orgName = (org.name || '').trim();
 
       if (!orgName || !ein) continue;
-
-      // Fetch detail for richer financial data — best-effort, not required.
-      const detail = await fetchOrgDetail(ein);
 
       const budget = formatRevenue(org.revenue_amount);
 
