@@ -479,3 +479,6 @@ const foundationRssPlugin = {
 };
 
 module.exports = foundationRssPlugin;
+
+/** @type {Array<{id: string, name: string, url: string}>} */
+module.exports.FEEDS = FEEDS;
