@@ -169,7 +169,9 @@ function parseDeadline(raw) {
     return `${raw.getUTCFullYear()}-${pad2(raw.getUTCMonth() + 1)}-${pad2(raw.getUTCDate())}`;
   }
 
-  const cleaned = String(raw).replace(/deadline:?\s*/i, '').trim();
+  const cleaned = String(raw)
+    .replace(/^(?:deadline|due date|closing date)s?:?\s*/i, '')
+    .trim();
   if (!cleaned) return null;
 
   const value = cleaned.replace(/\s+/g, ' ').trim();
