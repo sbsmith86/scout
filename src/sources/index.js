@@ -7,10 +7,12 @@ const idealist = require('./idealist');
 const foundationRss = require('./foundation-rss');
 const pndRfps = require('./pnd-rfps');
 const rfpdb = require('./rfpdb');
+const propublica = require('./propublica');
 
 module.exports = {
   idealist,
   foundationRss,
   pndRfps,
   rfpdb,
+  propublica,
 };

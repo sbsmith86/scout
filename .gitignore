@@ -11,3 +11,6 @@ config/profile.json
 # Google service account credentials
 config/google-service-account.json
 *.json.key
+
+# Runtime state — tracks last-successful-fetch timestamps per source plugin
+config/source-runs.json
