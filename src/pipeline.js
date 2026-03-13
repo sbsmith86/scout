@@ -31,6 +31,7 @@ const {
   appendCorrection,
 } = require('./sheets');
 const { sendRunSummaryEmail } = require('./notifications');
+const { runHealthChecks } = require('./health-check');
 
 const PROFILE_PATH = path.join(__dirname, '..', 'config', 'profile.json');
 
@@ -208,6 +209,30 @@ async function runPipeline(options = {}) {
   console.log('[pipeline] Loading profile...');
   const profile = loadProfile();
   console.log(`[pipeline] Profile loaded: ${profile.practice_name || 'HosTechnology'}`);
+
+  // ── 1a. Lightweight source health checks (non-blocking) ───────────────────
+  // Warn about degraded sources before fetching so failures are immediately
+  // visible.  A failing health check does NOT stop the run — the full fetch
+  // will still attempt all sources.
+  console.log('[pipeline] Running source health checks...');
+  try {
+    const healthResults = await runHealthChecks();
+    const failed = healthResults.filter((r) => !r.pass);
+    if (failed.length > 0) {
+      for (const r of failed) {
+        console.warn(`[pipeline] ⚠ Source health warning — ${r.name}: ${r.reason}`);
+      }
+      console.warn(
+        `[pipeline] ${failed.length}/${healthResults.length} source(s) may be degraded. ` +
+        'Run `scout check` for a full health report.'
+      );
+    } else {
+      console.log(`[pipeline] All ${healthResults.length} source(s) healthy.`);
+    }
+  } catch (err) {
+    // Health checks are best-effort; never abort the pipeline over them.
+    console.warn(`[pipeline] Health check error (non-fatal): ${err.message}`);
+  }
 
   // ── 2. Fetch from all source plugins ──────────────────────────────────────
   const allPlugins = Object.values(sources);

@@ -1042,3 +1042,8 @@ module.exports = {
     return scrapeResults;
   },
 };
+
+// Export module-level constants consumed by health-check.js
+module.exports.CANDIDATE_FEED_URLS = CANDIDATE_FEED_URLS;
+module.exports.FEEDS_PAGE_URL       = FEEDS_PAGE_URL;
+module.exports.TECH_CATEGORY_URL    = TECH_CATEGORY_URL;
