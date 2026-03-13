@@ -396,12 +396,115 @@ async function fetchViaRss(feedUrl) {
 
   console.log(`[rfpdb] RSS feed returned ${feed.items.length} item(s)`);
 
+  /**
+   * Canonicalise an RFPDB URL so that different variants (http/https, www/non-www,
+   * trailing slash differences, etc.) map to a stable string for set membership.
+   */
+  const canonicaliseRfpdbUrl = (rawUrl) => {
+    if (!rawUrl) return null;
+    try {
+      const u = new URL(rawUrl, BASE_URL);
+      // Normalise protocol and hostname
+      u.protocol = 'https:';
+      u.hostname = u.hostname.replace(/^www\./i, '');
+      // Drop hash fragments
+      u.hash = '';
+      // Normalise trailing slash (but keep root "/")
+      if (u.pathname.length > 1 && u.pathname.endsWith('/')) {
+        u.pathname = u.pathname.slice(0, -1);
+      }
+      return u.toString();
+    } catch {
+      return rawUrl.trim() || null;
+    }
+  };
+
+  /**
+   * Fetch the nonprofit issuer listing page and return a Set of canonicalised
+   * RFP URLs. This is used to enforce the technology ∩ non_profit intersection
+   * for the RSS path by intersecting on URL.
+   */
+  async function getNonprofitIssuerUrlSet() {
+    const html = await new Promise((resolve, reject) => {
+      const url = NONPROFIT_ISSUER_URL;
+      const client = url.startsWith('https') ? https : http;
+      client
+        .get(url, (res) => {
+          if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+            // Simple one-hop redirect handling
+            const redirectUrl = res.headers.location.startsWith('http')
+              ? res.headers.location
+              : BASE_URL.replace(/\/+$/, '') + '/' + res.headers.location.replace(/^\/+/, '');
+            const redirectClient = redirectUrl.startsWith('https') ? https : http;
+            redirectClient
+              .get(redirectUrl, (redirectRes) => {
+                let body = '';
+                redirectRes.on('data', (chunk) => (body += chunk));
+                redirectRes.on('end', () => resolve(body));
+              })
+              .on('error', reject);
+            return;
+          }
+
+          let body = '';
+          res.on('data', (chunk) => (body += chunk));
+          res.on('end', () => resolve(body));
+        })
+        .on('error', reject);
+    });
+
+    const $ = cheerio.load(html);
+    const urlSet = new Set();
+
+    $('a[href]').each((_, el) => {
+      const href = $(el).attr('href');
+      if (!href) return;
+
+      // Build absolute URL for relative hrefs
+      let absolute;
+      if (href.startsWith('http://') || href.startsWith('https://')) {
+        absolute = href;
+      } else {
+        absolute = BASE_URL.replace(/\/+$/, '') + '/' + href.replace(/^\/+/, '');
+      }
+
+      const canonical = canonicaliseRfpdbUrl(absolute);
+      if (canonical) {
+        urlSet.add(canonical);
+      }
+    });
+
+    return urlSet;
+  }
+
+  let nonprofitIssuerUrls = null;
+  try {
+    nonprofitIssuerUrls = await getNonprofitIssuerUrlSet();
+    console.log(
+      `[rfpdb] Nonprofit issuer view returned ${nonprofitIssuerUrls.size} URL(s) for intersection filtering`,
+    );
+  } catch (err) {
+    console.warn(
+      `[rfpdb] Failed to fetch/parse nonprofit issuer view for RSS intersection; proceeding without issuer filter:`,
+      err && err.message ? err.message : err,
+    );
+  }
+
   const opportunities = [];
   for (const item of feed.items) {
     const title = (item.title || '').trim();
     const url = (item.link || item.guid || '').trim();
 
     if (!title || !url) continue;
+
+    // Enforce technology ∩ non_profit by intersecting RSS items with the
+    // nonprofit issuer URL set when available.
+    if (nonprofitIssuerUrls && nonprofitIssuerUrls.size > 0) {
+      const canonicalItemUrl = canonicaliseRfpdbUrl(url);
+      if (!canonicalItemUrl || !nonprofitIssuerUrls.has(canonicalItemUrl)) {
+        continue;
+      }
+    }
 
     // Org: try custom field, then extract from content/description
     const org = extractOrgFromItem(item);
