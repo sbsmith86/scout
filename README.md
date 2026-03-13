@@ -251,7 +251,9 @@ scout/
 │   ├── test-sheets-connection.js     # Sheets integration test
 │   ├── test-scoring.js               # Scoring / disqualifier test harness
 │   ├── test-idealist-plugin.js       # Idealist source plugin smoke test
-│   └── test-foundation-rss-plugin.js # Foundation RSS source plugin smoke test
+│   ├── test-foundation-rss-plugin.js # Foundation RSS source plugin smoke test
+│   ├── test-pnd-rfps-plugin.js       # PND RFPs source plugin smoke test
+│   └── test-rfpdb-plugin.js          # RFPDB source plugin smoke test
 ├── src/
 │   ├── index.js                      # CLI entry point (scout run / fetch / dashboard)
 │   ├── pipeline.js                   # Main orchestrator: fetch → score → write
@@ -264,6 +266,8 @@ scout/
 │   └── sources/
 │       ├── index.js                  # Re-exports all source plugins
 │       ├── idealist.js               # Contract Finder — Idealist.org (Playwright + Cheerio)
+│       ├── pnd-rfps.js               # Contract Finder — Philanthropy News Digest RFPs
+│       ├── rfpdb.js                  # Contract Finder — RFPDB.com
 │       └── foundation-rss.js         # Funding Monitor — Foundation RSS feeds
 ├── .env.example                      # Environment variable template
 ├── .eslintrc.json
@@ -281,10 +285,13 @@ scout/
 scout run
   │
   ├── Contract Finder sources (type: 'contract')
-  │     └── Idealist.org  (Playwright + Cheerio)
+  │     ├── Idealist.org  (Playwright + Cheerio)
+  │     ├── PND RFPs  (Cheerio)
+  │     └── RFPDB.com  (rss-parser + Cheerio)
   │
   └── Funding Monitor sources (type: 'lead')
         └── Foundation RSS feeds  (rss-parser + Claude org extraction)
+        └── ProPublica Nonprofit API  (planned — issue #46)
   │
   ▼
 Deduplicate (by URL → org+title fallback)
@@ -332,6 +339,17 @@ Every source exports `{ id, name, type, fetch }`. The `fetch(profile)` function 
 ```
 
 To add a new source, create `src/sources/<name>.js` and re-export it from `src/sources/index.js`. Nothing else changes.
+
+### Funding Monitor — source selection notes
+
+The Funding Monitor relies on free sources only. The following were investigated and rejected:
+
+| Source | Reason not used |
+| --- | --- |
+| Candid News API (`developer.candid.org`) | $3,300/year (~$275/mo); no free tier. Data is article-level (not structured grant data) — same parsing challenge as RSS feeds but at significant cost. |
+| Candid Grants API | $6,000/year (~$500/mo). Would provide structured recipient/funder/amount data but priced for enterprise foundation customers, not a small consulting practice. |
+
+Current free sources: Foundation RSS feeds (this repo), ProPublica Nonprofit API (issue #46).
 
 ### Dashboard
 
