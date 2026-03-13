@@ -98,7 +98,14 @@ function intervalElapsed(plugin, runs) {
   }
   const lastRun = runs[plugin.id];
   if (!lastRun) return true; // never run before
-  const elapsed = Date.now() - new Date(lastRun).getTime();
+  const ts = new Date(lastRun).getTime();
+  if (Number.isNaN(ts)) {
+    console.warn(
+      `[pipeline] Invalid lastRun timestamp for "${plugin.id}" ("${lastRun}") — treating as never run`
+    );
+    return true; // corrupt entry → force a fresh fetch
+  }
+  const elapsed = Date.now() - ts;
   return elapsed >= intervalMs;
 }
 
@@ -343,8 +350,12 @@ async function runPipeline(options = {}) {
     }
   }
 
-  // Persist updated run timestamps (best-effort; non-fatal on failure).
-  saveSourceRuns(sourceRuns);
+  // Persist updated run timestamps only for a real run — skip when fetchOnly
+  // so that preview/dry-run invocations don't advance the scheduler and cause
+  // subsequent real runs to skip sources whose interval appears elapsed.
+  if (!fetchOnly) {
+    saveSourceRuns(sourceRuns);
+  }
 
   console.log(`[pipeline] Total fetched (pre-dedupe): ${allItems.length}`);
 
