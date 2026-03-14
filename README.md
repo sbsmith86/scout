@@ -340,6 +340,16 @@ Every source exports `{ id, name, type, fetch }`. The `fetch(profile)` function 
 
 To add a new source, create `src/sources/<name>.js` and re-export it from `src/sources/index.js`. Nothing else changes.
 
+### Key naming convention
+
+**All object keys throughout the pipeline must be `snake_case`.** This is a hard architectural rule — it must never be broken.
+
+Every module that reads from an external store (Google Sheets, Notion, an API, a scraper) is responsible for converting incoming property names to snake_case before passing data downstream. The scorer, drafter, dashboard, and Sheets/Notion writers all expect snake_case keys. Violating this convention will silently break scoring, display, and write-back.
+
+The Notion read layer (`src/notion/read.js`) is the canonical example: explicit property maps (`OPPORTUNITIES_MAP`, `LEADS_MAP`, `CORRECTIONS_MAP`) translate Notion's Title Case property names (`"Surface Reason"`, `"Date Surfaced"`, etc.) to the snake_case equivalents (`surface_reason`, `date_surfaced`) that the rest of the codebase consumes.
+
+When adding a new field anywhere in the pipeline — in a source plugin, a Sheets column, a Notion property, or a scorer output — the key you introduce **must** be snake_case.
+
 ### Funding Monitor — source selection notes
 
 The Funding Monitor relies on free sources only. The following were investigated and rejected:
