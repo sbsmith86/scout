@@ -450,15 +450,21 @@ async function runPipeline(options = {}) {
 
   for (const { item, scoreResult } of surfacedItems) {
     try {
+      let wasWritten;
       if (item.type === 'lead') {
-        await appendLead(buildLeadRecord(item, scoreResult));
+        wasWritten = await appendLead(buildLeadRecord(item, scoreResult));
       } else {
-        await appendOpportunity(buildOpportunityRecord(item, scoreResult));
+        wasWritten = await appendOpportunity(buildOpportunityRecord(item, scoreResult));
       }
-      notionWritten++;
-      console.log(
-        `[pipeline] Written: "${item.title}" → ${item.type === 'lead' ? 'Leads' : 'Opportunities'}`
-      );
+      // Treat an explicit `false` from the Notion append functions as "skipped/no-op".
+      // Any other value (including `undefined`) is considered a successful write to
+      // preserve existing behavior until the Notion layer is updated to return booleans.
+      if (wasWritten !== false) {
+        notionWritten++;
+        console.log(
+          `[pipeline] Written: "${item.title}" → ${item.type === 'lead' ? 'Leads' : 'Opportunities'}`
+        );
+      }
     } catch (err) {
       console.error(`[pipeline] Failed to write "${item.title}" to Notion: ${err.message}`);
     }
