@@ -9,13 +9,13 @@
  *  3. Deduplicate results (by URL, falling back to org+title)
  *  4. Run disqualifiers on each item
  *  5. Score non-disqualified items via Claude
- *  6. Write passing items to the appropriate Sheets tab (Opportunities or Leads)
+ *  6. Write passing items to the appropriate Notion database (Opportunities or Leads)
  *  7. Write filtered items to the Corrections Log (for the dashboard filtered section)
  *  8. Return a run summary (fetched / filtered / surfaced counts)
  *
  * The pipeline is the single entry point for both manual CLI runs (`scout run`)
  * and the weekly cron job — no interactive prompts, no side effects outside of
- * Google Sheets.
+ * Notion.
  */
 
 const fs = require('fs');
@@ -29,7 +29,7 @@ const {
   appendOpportunity,
   appendLead,
   appendCorrection,
-} = require('./sheets');
+} = require('./notion');
 const { sendRunSummaryEmail } = require('./notifications');
 const { runHealthChecks } = require('./health-check');
 
@@ -248,8 +248,8 @@ function printSummary(summary) {
   if (summary.surfaced !== undefined) {
     console.log(`  Surfaced          : ${summary.surfaced}`);
   }
-  if (summary.sheetsWritten !== undefined) {
-    console.log(`  Written to Sheets : ${summary.sheetsWritten}`);
+  if (summary.notionWritten !== undefined) {
+    console.log(`  Written to Notion : ${summary.notionWritten}`);
   }
   if (summary.sourceErrors && summary.sourceErrors.length > 0) {
     console.log(`  Source errors     : ${summary.sourceErrors.length}`);
@@ -442,11 +442,11 @@ async function runPipeline(options = {}) {
     `Total filtered: ${filteredItems.length}`
   );
 
-  // ── 6. Initialize Sheets headers and write surfaced items ─────────────────
-  console.log('[pipeline] Initializing Google Sheets headers...');
+  // ── 6. Initialize Notion databases and write surfaced items ──────────────
+  console.log('[pipeline] Initializing Notion database headers...');
   await initializeAllHeaders();
 
-  let sheetsWritten = 0;
+  let notionWritten = 0;
 
   for (const { item, scoreResult } of surfacedItems) {
     try {
@@ -455,12 +455,12 @@ async function runPipeline(options = {}) {
       } else {
         await appendOpportunity(buildOpportunityRecord(item, scoreResult));
       }
-      sheetsWritten++;
+      notionWritten++;
       console.log(
         `[pipeline] Written: "${item.title}" → ${item.type === 'lead' ? 'Leads' : 'Opportunities'}`
       );
     } catch (err) {
-      console.error(`[pipeline] Failed to write "${item.title}" to Sheets: ${err.message}`);
+      console.error(`[pipeline] Failed to write "${item.title}" to Notion: ${err.message}`);
     }
   }
 
@@ -498,7 +498,7 @@ async function runPipeline(options = {}) {
     duplicatesRemoved,
     filtered: filteredItems.length,
     surfaced: surfacedItems.length,
-    sheetsWritten,
+    notionWritten,
     filteredWritten,
     sourceErrors,
   };
