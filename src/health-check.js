@@ -13,7 +13,8 @@
  *     • Parse with rss-parser and confirm items.length > 0
  *
  *   Scrape / static sources (Idealist, PND RFPs, RFPDB):
- *     • For Idealist: open with Playwright, verify HTTP 200, check __NEXT_DATA__
+ *     • For Idealist: open with Playwright, verify HTTP 200, check for listing
+ *       links/elements (Idealist no longer uses Next.js __NEXT_DATA__ SSR embedding)
  *     • For PND RFPs: HTTP GET, verify HTTP 200, check listing element present
  *     • For RFPDB: HTTP GET tech-category page, verify HTTP 200, check listings
  *
@@ -37,7 +38,8 @@ const {
 } = require('./sources/rfpdb');
 
 const PND_RFPS_URL        = 'https://philanthropynewsdigest.org/rfps';
-const IDEALIST_SEARCH_URL = 'https://www.idealist.org/en/consultant-org-jobs';
+// Idealist migrated away from Next.js; use the /en/consulting path (q= to get real results).
+const IDEALIST_SEARCH_URL = 'https://www.idealist.org/en/consulting?q=automation';
 
 /** Content-type substrings that indicate genuine RSS/Atom XML. */
 const XML_CONTENT_TYPES = [
@@ -328,8 +330,14 @@ async function checkPndRfps() {
 
 /**
  * Health check for Idealist.org.
- * Uses Playwright to load the JS-rendered page, then verifies __NEXT_DATA__
- * is present in the rendered HTML.
+ *
+ * Uses Playwright to load the JS-rendered page, then verifies the page is
+ * accessible and contains consulting opportunity listings.
+ *
+ * NOTE: Idealist.org no longer embeds a Next.js `__NEXT_DATA__` SSR blob.
+ * The check looks for links to individual listing detail pages
+ * (`/en/consultant-org-job/…`) and common listing card elements instead.
+ * `__NEXT_DATA__` is treated as an optional fast-path signal if present.
  *
  * @returns {Promise<{id:string, name:string, pass:boolean, reason:string}>}
  */
@@ -349,43 +357,62 @@ async function checkIdealist() {
     browser = await chromium.launch({ headless: true });
     const page = await browser.newPage();
 
-    let statusCode = 200;
-    page.on('response', (resp) => {
-      if (resp.url() === IDEALIST_SEARCH_URL || resp.url().startsWith(IDEALIST_SEARCH_URL)) {
-        statusCode = resp.status();
-      }
-    });
-
     const response = await page.goto(IDEALIST_SEARCH_URL, {
       waitUntil: 'networkidle',
       timeout: 30000,
     });
 
-    if (response) {
-      statusCode = response.status();
-    }
+    const statusCode = response ? response.status() : 0;
 
     if (statusCode !== 200) {
       return { id, name, pass: false, reason: `HTTP ${statusCode}` };
     }
 
     const html = await page.content();
-    const hasNextData = html.includes('__NEXT_DATA__');
+    const $    = cheerio.load(html);
 
-    if (!hasNextData) {
-      return { id, name, pass: false, reason: 'page loaded but __NEXT_DATA__ marker not found' };
+    // ── 1. Links to individual listing detail pages ──────────────────────────
+    // These are the most reliable indicator: any page listing consultant jobs
+    // will have <a href="/en/consultant-org-job/…"> links regardless of
+    // which frontend framework Idealist is currently using.
+    const listingLinks = $('a[href*="/consultant-org-job/"]').length;
+    if (listingLinks > 0) {
+      return { id, name, pass: true, reason: `page loads, ${listingLinks} listing link(s) found` };
     }
 
-    // Confirm there is at least some JSON content in __NEXT_DATA__
-    const $ = cheerio.load(html);
+    // ── 2. Listing card elements via CSS selectors ────────────────────────────
+    const cardSelectors = [
+      '[data-test="listing-card"]',
+      '[data-qa-id="listing-card"]',
+      '[data-testid*="listing"]',
+      '[data-testid*="card"]',
+      '[data-automation="listing-card"]',
+      '.ListingCard',
+      '.listing-card',
+      'article[class*="ListingCard"]',
+      'article[class*="listing"]',
+      'li[class*="SearchResult"]',
+      'li[class*="listing"]',
+    ];
+    for (const sel of cardSelectors) {
+      const count = $(sel).length;
+      if (count > 0) {
+        return { id, name, pass: true, reason: `page loads, ${count} listing card element(s) found (${sel})` };
+      }
+    }
+
+    // ── 3. __NEXT_DATA__ fast-path (optional — kept for forward-compatibility) ─
     const nextDataRaw = $('#__NEXT_DATA__').html();
-    const hasParseable = nextDataRaw && nextDataRaw.length > 50;
-
-    if (!hasParseable) {
-      return { id, name, pass: false, reason: 'page loaded, __NEXT_DATA__ present but appears empty' };
+    if (nextDataRaw && nextDataRaw.length > 50) {
+      return { id, name, pass: true, reason: 'page loads, __NEXT_DATA__ present' };
     }
 
-    return { id, name, pass: true, reason: 'page loads, data markers found' };
+    return {
+      id,
+      name,
+      pass: false,
+      reason: 'page loaded (HTTP 200) but no listing elements or links detected — scraper selectors may need updating',
+    };
   } catch (err) {
     return { id, name, pass: false, reason: `Playwright error: ${err.message}` };
   } finally {

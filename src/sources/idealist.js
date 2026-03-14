@@ -3,23 +3,45 @@
 /**
  * Idealist.org source plugin — Contract Finder (Agent 1).
  *
- * Scrapes https://www.idealist.org/en/consultant-org-jobs, normalises each
- * listing to the standard opportunity schema, and returns the array.
+ * Scrapes https://www.idealist.org/en/consulting (consulting opportunities
+ * posted by nonprofits/orgs), normalises each listing to the standard
+ * opportunity schema, and returns the array.
  *
- * Idealist renders search results via client-side JavaScript (React/Next.js),
- * so Playwright is used to fully render the page before extracting listings.
+ * Idealist renders search results via client-side JavaScript (React), so
+ * Playwright is used to fully render the page before extracting listings.
  * Cheerio is used for HTML parsing after the page has been rendered.
  *
- * If the page structure changes and scraping breaks, look for the SSR JSON
- * payload embedded in a <script id="__NEXT_DATA__"> tag first — it contains
- * the full listings array and is far more stable than CSS selectors.
+ * Three extraction strategies are attempted in order:
+ *
+ *   1. __NEXT_DATA__ JSON payload (fast-path; only present if Idealist is
+ *      running Next.js SSR — not currently the case as of 2024, but kept
+ *      for forward-compatibility in case they reintroduce it).
+ *
+ *   2. CSS selector scraping — tries a battery of known card-element
+ *      selectors that cover various Idealist layout generations.
+ *
+ *   3. Link-scan fallback — scans the page for any <a href> pointing to
+ *      an individual consultant-org-job detail page
+ *      (/en/consultant-org-job/…).  This is framework-agnostic and
+ *      resilient to CSS-class refactors; it always extracts at least a
+ *      title and URL even when the card markup changes.
  */
 
 const { chromium } = require('playwright');
 const cheerio = require('cheerio');
 
 const BASE_URL = 'https://www.idealist.org';
-const SEARCH_URL = `${BASE_URL}/en/consultant-org-jobs`;
+// Idealist moved away from /en/consultant-org-jobs; /en/consulting is the
+// current path for consulting opportunities posted by nonprofits/orgs.
+// The old path may redirect, but using the current one avoids a round-trip.
+const SEARCH_URL = `${BASE_URL}/en/consulting`;
+
+/**
+ * Matches paths to individual consultant-org-job detail pages.
+ * Example: /en/consultant-org-job/abc123/some-title-slug
+ * Hoisted to module scope so it is compiled once, not on every link-scan call.
+ */
+const LISTING_PATH_RE = /\/en\/consultant-org-job\/([^/?#\s]+)/;
 
 /** Maximum pages to scrape per search term (polite ceiling). */
 const MAX_PAGES = 5;
@@ -130,6 +152,10 @@ function delay(ms) {
  * Extract the Next.js server-side data payload embedded as JSON in
  * `<script id="__NEXT_DATA__">`.  Returns null if absent or unparseable.
  *
+ * NOTE: Idealist.org no longer uses Next.js SSR (as of 2024).  This
+ * function is kept as a forward-compat fast-path in case they reintroduce
+ * SSR — it will simply return null on the current site, which is harmless.
+ *
  * @param {import('cheerio').CheerioAPI} $
  * @returns {object|null}
  */
@@ -146,6 +172,9 @@ function extractNextData($) {
 /**
  * Attempt to parse opportunity listings from the embedded Next.js JSON
  * payload.  Returns an empty array if the expected data path is not found.
+ *
+ * NOTE: Only useful when Idealist is running Next.js SSR.  Returns [] on
+ * the current client-rendered site, falling through to the other strategies.
  *
  * @param {object} nextData  Parsed __NEXT_DATA__ object
  * @returns {object[]}       Normalised opportunity objects
@@ -235,9 +264,13 @@ function listingsFromHTML($) {
   const listings = [];
 
   // Try selector families most → least specific.
+  // Keep this list in sync with the cardSelectors list in src/health-check.js
+  // so that a health-check "pass" means the scraper can also find cards.
   const cardSelectors = [
     '[data-test="listing-card"]',
     '[data-qa-id="listing-card"]',
+    '[data-testid*="listing"]',
+    '[data-testid*="card"]',
     '[data-automation="listing-card"]',
     '.ListingCard',
     '.listing-card',
@@ -385,6 +418,71 @@ function listingsFromHTML($) {
 }
 
 /**
+ * Last-resort link-scan extraction.
+ *
+ * Scans every anchor tag on the page for hrefs that match the Idealist
+ * consultant-org-job detail page pattern (`/en/consultant-org-job/…`).
+ * This approach is framework-agnostic: it does not rely on specific CSS
+ * class names or data attributes, so it survives most frontend refactors.
+ *
+ * Information extracted is minimal (title from anchor text, URL from href)
+ * but sufficient to queue the opportunity for scoring and detail-page fetch.
+ *
+ * @param {import('cheerio').CheerioAPI} $
+ * @returns {object[]}
+ */
+function listingsFromLinkScan($) {
+  const listings = [];
+  const seen = new Set();
+
+  $('a[href]').each((_, el) => {
+    const href = $(el).attr('href') || '';
+    const m = href.match(LISTING_PATH_RE);
+    if (!m) return;
+
+    const url = href.startsWith('http') ? href : `${BASE_URL}${href}`;
+    if (seen.has(url)) return;
+    seen.add(url);
+
+    // Extract the listing slug from the URL for a stable ID.
+    const slug = m[1];
+    const id = `idealist-${slug}`;
+
+    // Title: prefer text inside a heading child, else use the anchor's own text.
+    const $a = $(el);
+    const title =
+      $a.find('h2, h3, h4, h5').first().text().trim() ||
+      $a.text().trim();
+    if (!title) return; // skip anonymous links
+
+    // Walk up the DOM to find the closest card-like container, then look for
+    // an org name element within it.
+    const card = $a.closest('article, section, li, [class*="card"], [class*="listing"]');
+    let org = '';
+    if (card.length > 0) {
+      const orgEl = card
+        .find('[class*="org"], [class*="Org"], [class*="organization"], [class*="company"]')
+        .first();
+      if (orgEl.length > 0) org = orgEl.text().trim();
+    }
+
+    listings.push({
+      id,
+      source: 'idealist',
+      title,
+      org: org || 'Unknown Organization',
+      url,
+      deadline: null,
+      budget: null,
+      description: '',
+      type: 'contract',
+    });
+  });
+
+  return listings;
+}
+
+/**
  * Return true if the page contains a "next page" control.
  *
  * @param {import('cheerio').CheerioAPI} $
@@ -465,24 +563,30 @@ module.exports = {
 
           const $ = cheerio.load(html);
 
-          // Prefer the structured JSON payload embedded by Next.js — it is more
-          // reliable than CSS selectors and less likely to break on layout changes.
+          // ── Extraction strategy 1: __NEXT_DATA__ JSON (fast-path) ──────────
+          // Only present when Idealist is using Next.js SSR.  Not currently the
+          // case (2024+), but kept for forward-compatibility.
           const nextData = extractNextData($);
           let listings = nextData ? listingsFromNextData(nextData) : [];
 
-          // Fall back to HTML selector scraping if the JSON path yields nothing.
+          // ── Extraction strategy 2: CSS selector scraping ───────────────────
           if (listings.length === 0) {
             listings = listingsFromHTML($);
           }
 
+          // ── Extraction strategy 3: Link-scan fallback ──────────────────────
+          // Framework-agnostic: find any <a href="/en/consultant-org-job/…">
+          // links.  Resilient to CSS-class refactors.
           if (listings.length === 0) {
-            const hadNextDataTag = $('#__NEXT_DATA__').length > 0;
-            const nextDataParsed = nextData !== null;
+            listings = listingsFromLinkScan($);
+          }
+
+          if (listings.length === 0) {
             console.warn(
               `[idealist] WARN: 0 listings on page ${pageNum} for "${term}" — ` +
-              `url: ${pageUrl} | __NEXT_DATA__ tag present: ${hadNextDataTag} | ` +
-              `__NEXT_DATA__ parsed: ${nextDataParsed} | content-type: ${contentType || 'unknown'} ` +
-              '— stopping pagination'
+              `url: ${pageUrl} | content-type: ${contentType || 'unknown'} | ` +
+              `__NEXT_DATA__ present: ${html.includes('__NEXT_DATA__') ? 'yes' : 'no'} ` +
+              '— stopping pagination for this term'
             );
             morePages = false;
           } else {
@@ -515,7 +619,10 @@ module.exports = {
     if (opportunities.length === 0) {
       console.warn(
         `[idealist] WARN: All ${searchTerms.length} search term(s) returned 0 results. ` +
-        'Check that the URL is correct and that Idealist.org is returning scrapable listings.'
+        `Check that ${SEARCH_URL} is the correct search endpoint and that ` +
+        'Idealist.org is returning scrapable listings. If the page loads but no ' +
+        'listings are found, run `node scripts/test-idealist-plugin.js` for details ' +
+        'and inspect the rendered HTML to update selectors or the URL.'
       );
     }
 
