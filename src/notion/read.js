@@ -142,8 +142,10 @@ async function readDatabase(databaseId, propertyMap, filter) {
  * @returns {Promise<object[]>}
  */
 async function readOpportunities(status = null) {
-  const filter = status
-    ? { property: 'Status', select: { equals: status } }
+  const normalizedStatus =
+    typeof status === 'string' ? status.toLowerCase() : status;
+  const filter = normalizedStatus
+    ? { property: 'Status', select: { equals: normalizedStatus } }
     : undefined;
   return readDatabase(OPPORTUNITIES_DB_ID, OPPORTUNITIES_MAP, filter);
 }
@@ -156,8 +158,10 @@ async function readOpportunities(status = null) {
  * @returns {Promise<object[]>}
  */
 async function readLeads(status = null) {
-  const filter = status
-    ? { property: 'Status', select: { equals: status } }
+  const normalizedStatus =
+    typeof status === 'string' ? status.toLowerCase() : status;
+  const filter = normalizedStatus
+    ? { property: 'Status', select: { equals: normalizedStatus } }
     : undefined;
   return readDatabase(LEADS_DB_ID, LEADS_MAP, filter);
 }
@@ -184,8 +188,8 @@ async function readCorrections(feedback = null) {
  */
 async function readPendingForDashboard() {
   const [opportunities, leads] = await Promise.all([
-    readOpportunities('Pending'),
-    readLeads('Pending'),
+    readOpportunities('pending'),
+    readLeads('pending'),
   ]);
   return { opportunities, leads };
 }
