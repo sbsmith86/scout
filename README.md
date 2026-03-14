@@ -8,10 +8,13 @@ Scout is a private internal business development tool for **HosTechnology**. It 
 
 Nothing is ever submitted or sent automatically. The human is always in the loop.
 
+> **Notion MCP Hackathon** — Scout is currently being adapted for the [DEV.to Notion MCP Challenge](https://dev.to/challenges/notionmcp). The hackathon version replaces Google Sheets with Notion databases and adds a conversational review flow via Claude + Notion MCP. See [HACKATHON_PLAN.md](HACKATHON_PLAN.md) for the full implementation plan, architecture, and demo script.
+
 ---
 
 ## Table of Contents
 
+- [Notion MCP Hackathon](#notion-mcp-hackathon)
 - [Prerequisites](#prerequisites)
 - [Local Setup](#local-setup)
 - [Configuration](#configuration)
@@ -19,6 +22,7 @@ Nothing is ever submitted or sent automatically. The human is always in the loop
   - [Environment variables](#environment-variables)
   - [Google Cloud service account](#google-cloud-service-account)
   - [Google Sheets](#google-sheets)
+  - [Notion (hackathon)](#notion-hackathon)
 - [Running Scout locally](#running-scout-locally)
 - [Testing](#testing)
 - [Project structure](#project-structure)
@@ -142,6 +146,25 @@ The real `.env` is gitignored. Never commit it.
 
 Header rows are written automatically the first time Scout runs or when you run the Sheets connection test (see [Testing](#testing)).
 
+### Notion (hackathon)
+
+The Notion backend is a drop-in replacement for Google Sheets. To use it:
+
+1. Create a Notion integration at https://www.notion.so/my-integrations and get the API key (`ntn_...`).
+2. Create a "Scout Pipeline" page in Notion and share it with the integration.
+3. Create three inline databases under that page: **Opportunities**, **Leads**, **Corrections Log**. See [HACKATHON_PLAN.md](HACKATHON_PLAN.md) for the full schema.
+4. Share each database with the integration (three-dot menu → Add connections).
+5. Add the following to `.env`:
+
+```
+NOTION_API_KEY=ntn_...
+NOTION_OPPORTUNITIES_DB_ID=...    # From the database URL
+NOTION_LEADS_DB_ID=...
+NOTION_CORRECTIONS_DB_ID=...
+```
+
+See [docs/notion-mcp-setup.md](docs/notion-mcp-setup.md) for MCP server configuration and quirks.
+
 ---
 
 ## Running Scout locally
@@ -203,6 +226,14 @@ Expected output when everything is configured correctly:
 Connection test PASSED — all sheets readable and writable.
 ```
 
+### Notion connection test
+
+Verifies API key, database access, and full CRUD on all three Notion databases. Writes a test page to each, reads it back, then archives it.
+
+```bash
+node scripts/test-notion-connection.js
+```
+
 ### Scoring test
 
 Runs mock opportunities and leads through the disqualifier and optionally the Claude scorer. Use this to validate signal quality and profile tuning before a real run.
@@ -247,30 +278,36 @@ scout/
 │   ├── profile.json                  # Gitignored — your real profile goes here
 │   ├── google-service-account.example.json
 │   └── google-service-account.json   # Gitignored — your real key goes here
+├── checkpoints/                          # Process narratives and learning logs
+├── docs/
+│   └── notion-mcp-setup.md              # MCP server config and quirks
 ├── scripts/
-│   ├── test-sheets-connection.js     # Sheets integration test
-│   ├── test-scoring.js               # Scoring / disqualifier test harness
-│   ├── test-idealist-plugin.js       # Idealist source plugin smoke test
-│   ├── test-foundation-rss-plugin.js # Foundation RSS source plugin smoke test
-│   ├── test-pnd-rfps-plugin.js       # PND RFPs source plugin smoke test
-│   └── test-rfpdb-plugin.js          # RFPDB source plugin smoke test
+│   ├── test-sheets-connection.js         # Sheets integration test
+│   ├── test-notion-connection.js         # Notion integration test (CRUD + cleanup)
+│   ├── test-scoring.js                   # Scoring / disqualifier test harness
+│   ├── test-idealist-plugin.js           # Idealist source plugin smoke test
+│   ├── test-foundation-rss-plugin.js     # Foundation RSS source plugin smoke test
+│   ├── test-pnd-rfps-plugin.js           # PND RFPs source plugin smoke test
+│   └── test-rfpdb-plugin.js             # RFPDB source plugin smoke test
 ├── src/
-│   ├── index.js                      # CLI entry point (scout run / fetch / dashboard)
-│   ├── pipeline.js                   # Main orchestrator: fetch → score → write
-│   ├── contacts/                     # Contact resolution (Hunter.io + web scraping)
-│   ├── dashboard/                    # Express server + HTML template
-│   ├── drafting/                     # Proposal and outreach draft generation
-│   ├── notifications/                # Resend email notifications
-│   ├── scoring/                      # Disqualifier + Claude scorer
-│   ├── sheets/                       # Google Sheets read/write client
+│   ├── index.js                          # CLI entry point (scout run / fetch / dashboard)
+│   ├── pipeline.js                       # Main orchestrator: fetch → score → write
+│   ├── contacts/                         # Contact resolution (Hunter.io + web scraping)
+│   ├── dashboard/                        # Express server + HTML template
+│   ├── drafting/                         # Proposal and outreach draft generation
+│   ├── notifications/                    # Resend email notifications
+│   ├── notion/                           # Notion read/write client (hackathon — replaces sheets)
+│   ├── scoring/                          # Disqualifier + Claude scorer
+│   ├── sheets/                           # Google Sheets read/write client (original)
 │   └── sources/
 │       ├── index.js                  # Re-exports all source plugins
 │       ├── idealist.js               # Contract Finder — Idealist.org (Playwright + Cheerio)
 │       ├── pnd-rfps.js               # Contract Finder — Philanthropy News Digest RFPs
 │       ├── rfpdb.js                  # Contract Finder — RFPDB.com
 │       └── foundation-rss.js         # Funding Monitor — Foundation RSS feeds
-├── .env.example                      # Environment variable template
+├── .env.example                          # Environment variable template
 ├── .eslintrc.json
+├── HACKATHON_PLAN.md                     # Notion MCP Challenge implementation plan
 ├── package.json
 └── README.md
 ```
@@ -297,7 +334,7 @@ scout run
 Deduplicate (by URL → org+title fallback)
   │
   ▼
-Disqualifier  ──── fail ────► Corrections Log (Sheets) ──► Dashboard filtered section
+Disqualifier  ──── fail ────► Corrections Log ──► Dashboard filtered section
   │
   pass
   │
@@ -305,13 +342,22 @@ Disqualifier  ──── fail ────► Corrections Log (Sheets) ──�
 Claude scorer (relevance / fit / feasibility / quality — each 1–5, pass threshold: 12+)
   │
   ├── pass ──► Contact resolution → Application process discovery → Draft generation
-  │                └─► Opportunities / Leads sheet (Sheets)
+  │                └─► Opportunities / Leads (storage layer)
   │
-  └── fail ──► Corrections Log (Sheets) ──► Dashboard filtered section
+  └── fail ──► Corrections Log ──► Dashboard filtered section
   │
   ▼
 Resend notification email  (run summary + dashboard link)
 ```
+
+**Storage backends:** The pipeline writes to whichever storage module is imported in `pipeline.js`. Both backends expose the same interface:
+
+| Backend | Module | Status |
+|---------|--------|--------|
+| Google Sheets | `src/sheets/` | Original — production |
+| Notion | `src/notion/` | Hackathon — replaces Sheets + adds MCP review via Claude |
+
+The Notion backend adds a conversational review flow: Claude queries the Notion databases via MCP, summarizes pending items, and updates statuses through natural language. See [HACKATHON_PLAN.md](HACKATHON_PLAN.md) for the full architecture.
 
 ### Source plugin contract
 
@@ -363,10 +409,10 @@ Current free sources: Foundation RSS feeds (this repo), ProPublica Nonprofit API
 
 ### Dashboard
 
-The review dashboard is a single-page Express app served at `http://localhost:3000`. It reads live from Google Sheets and provides:
+The review dashboard is a single-page Express app served at `http://localhost:3000`. It reads live from the storage layer and provides:
 
 - **Opportunities tab** — pending Contract Finder items with approve / skip / edit controls
 - **Leads tab** — pending Funding Monitor items
 - **Filtered section** — items that didn't pass scoring, with thumbs-up / thumbs-down feedback buttons that write to the Corrections Log
 
-Approving an item exports the draft to Google Docs and marks the row `approved` in Sheets.
+With the Sheets backend, approving an item exports the draft to Google Docs. With the Notion backend, the draft lives directly on the Notion page and review happens through Claude + MCP.
