@@ -177,8 +177,13 @@ async function initializeAllHeaders() {
     try {
       await notion.databases.retrieve({ database_id: id });
     } catch (err) {
+      const message = err?.message ?? String(err);
+      const codeSuffix =
+        err && typeof err === 'object' && 'code' in err && err.code
+          ? ` (code: ${err.code})`
+          : '';
       console.error(
-        `[notion] ✗ ${label} database (${id}) is not reachable: ${err.message}. ` +
+        `[notion] ✗ ${label} database (${id}) is not reachable: ${message}${codeSuffix}. ` +
         `Check ${envVar} in .env and ensure the integration has been shared with the database.`
       );
     }
