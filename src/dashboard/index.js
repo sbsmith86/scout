@@ -5,22 +5,22 @@
  *
  * Routes:
  *   GET  /                           Serves the single-page dashboard HTML
- *   GET  /api/opportunities          Pending opportunities from Google Sheets
- *   GET  /api/opportunities/approved Approved opportunities from Google Sheets
- *   GET  /api/leads                  Pending leads from Google Sheets
- *   GET  /api/leads/approved         Approved leads from Google Sheets
+ *   GET  /api/opportunities          Pending opportunities from Notion
+ *   GET  /api/opportunities/approved Approved opportunities from Notion
+ *   GET  /api/leads                  Pending leads from Notion
+ *   GET  /api/leads/approved         Approved leads from Notion
  *   GET  /api/filtered               Unreviewed filtered items (empty feedback) from Corrections Log
- *   PATCH /api/opportunities/:id/status  Update opportunity status in Sheets
- *   PATCH /api/leads/:id/status          Update lead status in Sheets
- *   PATCH /api/opportunities/:id/draft   Update opportunity draft text in Sheets
- *   PATCH /api/leads/:id/draft           Update lead draft text in Sheets
- *   POST  /api/corrections               Append a new correction/feedback entry to Sheets
+ *   PATCH /api/opportunities/:id/status  Update opportunity status in Notion
+ *   PATCH /api/leads/:id/status          Update lead status in Notion
+ *   PATCH /api/opportunities/:id/draft   Update opportunity draft text in Notion
+ *   PATCH /api/leads/:id/draft           Update lead draft text in Notion
+ *   POST  /api/corrections               Append a new correction/feedback entry to Notion
  *   PATCH /api/corrections/:id/feedback  Update feedback on an existing correction row
  */
 
 const express = require('express');
 const { randomUUID } = require('crypto');
-const { readOpportunities, readLeads, readCorrections, updateStatus, updateDraftText, updateDraftDocLink, appendCorrection, updateCorrectionFeedback } = require('../sheets');
+const { readOpportunities, readLeads, readCorrections, updateStatus, updateDraftText, appendCorrection, updateCorrectionFeedback } = require('../notion');
 const { exportDraft } = require('../drafting');
 const { renderPage } = require('./template');
 
@@ -100,25 +100,18 @@ function createApp() {
     try {
       await updateStatus('Opportunities', id, status);
 
-      // On approval, create a Google Doc with the draft and write the link back.
+      // On approval, attempt to create a Google Doc with the draft.
+      // This requires Google service account credentials — if they are absent the
+      // export is silently skipped and the status update still succeeds.
       let draft_doc_link;
       if (status === 'approved') {
         const rows = await readOpportunities('approved');
         const item = rows.find((r) => r.id === id);
         if (item) {
-          let docLink;
           try {
-            docLink = await exportDraft(item, 'opportunity');
+            draft_doc_link = await exportDraft(item, 'opportunity');
           } catch (exportErr) {
             console.error(`[dashboard] Google Docs export failed for opportunity ${id}: ${exportErr.message}`);
-          }
-          if (docLink) {
-            try {
-              await updateDraftDocLink('Opportunities', id, docLink);
-              draft_doc_link = docLink;
-            } catch (sheetsErr) {
-              console.error(`[dashboard] Updating draft_doc_link in Sheets failed for opportunity ${id}: ${sheetsErr.message}`);
-            }
           }
         }
       }
@@ -138,25 +131,18 @@ function createApp() {
     try {
       await updateStatus('Leads', id, status);
 
-      // On approval, create a Google Doc with the draft and write the link back.
+      // On approval, attempt to create a Google Doc with the draft.
+      // This requires Google service account credentials — if they are absent the
+      // export is silently skipped and the status update still succeeds.
       let draft_doc_link;
       if (status === 'approved') {
         const rows = await readLeads('approved');
         const item = rows.find((r) => r.id === id);
         if (item) {
-          let docLink;
           try {
-            docLink = await exportDraft(item, 'lead');
+            draft_doc_link = await exportDraft(item, 'lead');
           } catch (exportErr) {
             console.error(`[dashboard] Google Docs export failed for lead ${id}: ${exportErr.message}`);
-          }
-          if (docLink) {
-            try {
-              await updateDraftDocLink('Leads', id, docLink);
-              draft_doc_link = docLink;
-            } catch (sheetsErr) {
-              console.error(`[dashboard] Updating draft_doc_link in Sheets failed for lead ${id}: ${sheetsErr.message}`);
-            }
           }
         }
       }
