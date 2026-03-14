@@ -1,7 +1,6 @@
 'use strict';
 
 const { notion, OPPORTUNITIES_DB_ID, LEADS_DB_ID, CORRECTIONS_DB_ID } = require('./client');
-const { OPPORTUNITIES_HEADERS, LEADS_HEADERS, CORRECTIONS_HEADERS } = require('./write');
 
 // ── Property extraction helpers ───────────────────────────────────────────────
 
@@ -32,18 +31,67 @@ function extractText(prop) {
   }
 }
 
+// ── Notion → pipeline key mapping ────────────────────────────────────────────
+// Maps Notion Title Case property names to the snake_case keys that the rest
+// of the codebase (pipeline, dashboard, scorer) expects.  This keeps the Notion
+// module a drop-in replacement for the sheets module.
+
+const OPPORTUNITIES_MAP = {
+  'Name':           'id',
+  'Source':         'source',
+  'Title':         'title',
+  'Organization':  'org',
+  'URL':           'url',
+  'Deadline':      'deadline',
+  'Budget':        'budget',
+  'Score':         'score',
+  'Confidence':    'confidence',
+  'Surface Reason':'surface_reason',
+  'Description':   'description',
+  'Status':        'status',
+  'Date Surfaced': 'date_surfaced',
+  'Draft Text':    'draft_text',
+};
+
+const LEADS_MAP = {
+  'Name':           'id',
+  'Organization':   'org',
+  'Funder':         'funder',
+  'Funding Amount': 'funding_amount',
+  'Funding Date':   'funding_date',
+  'Mission Summary':'mission_summary',
+  'Score':          'score',
+  'Confidence':     'confidence',
+  'Surface Reason': 'surface_reason',
+  'Status':         'status',
+  'Date Surfaced':  'date_surfaced',
+  'Draft Text':     'draft_text',
+};
+
+const CORRECTIONS_MAP = {
+  'Name':          'id',
+  'Item ID':       'item_id',
+  'Item Type':     'item_type',
+  'Title':         'title',
+  'Organization':  'org',
+  'Source':        'source',
+  'Filter Reason': 'filter_reason',
+  'Feedback':      'feedback',
+  'Date':          'date',
+};
+
 // ── Read helper ───────────────────────────────────────────────────────────────
 
 /**
  * Reads all pages from a Notion database and returns an array of plain objects
- * keyed by the provided header list.  Handles pagination automatically.
+ * with snake_case keys matching the sheets module interface.
  *
  * @param {string}   databaseId
- * @param {string[]} headers  Column names that map to Notion property names
- * @param {object}   [filter]  Optional Notion filter object
+ * @param {object}   propertyMap  Notion property name → pipeline key
+ * @param {object}   [filter]     Optional Notion filter object
  * @returns {Promise<object[]>}
  */
-async function readDatabase(databaseId, headers, filter) {
+async function readDatabase(databaseId, propertyMap, filter) {
   const results = [];
   let cursor;
 
@@ -59,9 +107,9 @@ async function readDatabase(databaseId, headers, filter) {
 
     for (const page of res.results) {
       const obj = {};
-      for (const header of headers) {
-        const prop = page.properties[header];
-        obj[header] = prop ? extractText(prop) : '';
+      for (const [notionName, pipelineKey] of Object.entries(propertyMap)) {
+        const prop = page.properties[notionName];
+        obj[pipelineKey] = prop ? extractText(prop) : '';
       }
       results.push(obj);
     }
@@ -85,7 +133,7 @@ async function readOpportunities(status = null) {
   const filter = status
     ? { property: 'Status', select: { equals: status } }
     : undefined;
-  return readDatabase(OPPORTUNITIES_DB_ID, OPPORTUNITIES_HEADERS, filter);
+  return readDatabase(OPPORTUNITIES_DB_ID, OPPORTUNITIES_MAP, filter);
 }
 
 /**
@@ -99,7 +147,7 @@ async function readLeads(status = null) {
   const filter = status
     ? { property: 'Status', select: { equals: status } }
     : undefined;
-  return readDatabase(LEADS_DB_ID, LEADS_HEADERS, filter);
+  return readDatabase(LEADS_DB_ID, LEADS_MAP, filter);
 }
 
 /**
@@ -113,7 +161,7 @@ async function readCorrections(feedback = null) {
   const filter = feedback
     ? { property: 'Feedback', select: { equals: feedback } }
     : undefined;
-  return readDatabase(CORRECTIONS_DB_ID, CORRECTIONS_HEADERS, filter);
+  return readDatabase(CORRECTIONS_DB_ID, CORRECTIONS_MAP, filter);
 }
 
 /**
@@ -124,8 +172,8 @@ async function readCorrections(feedback = null) {
  */
 async function readPendingForDashboard() {
   const [opportunities, leads] = await Promise.all([
-    readOpportunities('pending'),
-    readLeads('pending'),
+    readOpportunities('Pending'),
+    readLeads('Pending'),
   ]);
   return { opportunities, leads };
 }
