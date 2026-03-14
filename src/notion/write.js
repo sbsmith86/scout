@@ -27,11 +27,22 @@ const CORRECTIONS_HEADERS = [
 
 // ── Property builder helpers ──────────────────────────────────────────────────
 
-/** Rich-text property value */
+// Notion enforces a 2 000-character limit per rich_text content item.
+// Values that exceed this (e.g. draft_text, description) are split into
+// successive chunks so the API never returns a 400 validation error.
+const RICH_TEXT_MAX = 2000;
+
+/** Rich-text property value — splits long strings into 2 000-char chunks */
 function text(value) {
-  return {
-    rich_text: [{ text: { content: String(value ?? '') } }],
-  };
+  const str = String(value ?? '');
+  if (str.length <= RICH_TEXT_MAX) {
+    return { rich_text: [{ text: { content: str } }] };
+  }
+  const chunks = Array.from(
+    { length: Math.ceil(str.length / RICH_TEXT_MAX) },
+    (_, i) => ({ text: { content: str.slice(i * RICH_TEXT_MAX, (i + 1) * RICH_TEXT_MAX) } })
+  );
+  return { rich_text: chunks };
 }
 
 /** Title property value (Notion requires exactly one title property per page) */
@@ -63,6 +74,25 @@ function url(value) {
 function date(value) {
   if (!value) return { date: null };
   return { date: { start: String(value) } };
+}
+
+// ── Sheet-name validation ─────────────────────────────────────────────────────
+
+const VALID_SHEET_NAMES = ['Opportunities', 'Leads'];
+
+/**
+ * Maps a validated sheetName string to the correct Notion database ID.
+ * Throws immediately for unrecognised values so typos surface early.
+ *
+ * @param {string} sheetName
+ * @returns {string} databaseId
+ */
+function resolveDatabase(sheetName) {
+  if (sheetName === 'Opportunities') return OPPORTUNITIES_DB_ID;
+  if (sheetName === 'Leads') return LEADS_DB_ID;
+  throw new Error(
+    `Unknown sheet name "${sheetName}". Must be one of: ${VALID_SHEET_NAMES.join(', ')}.`
+  );
 }
 
 // ── Query helper ──────────────────────────────────────────────────────────────
@@ -276,14 +306,44 @@ async function appendCorrection(correction) {
 
 /**
  * Updates the feedback field of an existing Corrections Log page.
- * Finds the most recent page with the given id.
- * Throws a descriptive error if no page with the given id is found.
+ *
+ * Prefers the most recent page whose feedback field is empty (matching the
+ * Sheets behaviour of writing to the first unfeedback-ed row with the given id).
+ * Falls back to the most recent page with any value if no empty-feedback page
+ * is found.  Throws a descriptive error if no page exists with the given id.
  *
  * @param {string} id       The correction row id (e.g. 'corr-abc12345')
  * @param {string} feedback 'good_filter' | 'bad_filter'
  */
 async function updateCorrectionFeedback(id, feedback) {
-  const page = await findPageById(CORRECTIONS_DB_ID, id);
+  const sorts = [{ timestamp: 'created_time', direction: 'descending' }];
+
+  // First try: most recent page with matching id AND empty feedback
+  const emptyFeedbackRes = await notion.databases.query({
+    database_id: CORRECTIONS_DB_ID,
+    filter: {
+      and: [
+        { property: 'id', rich_text: { equals: id } },
+        { property: 'feedback', select: { is_empty: true } },
+      ],
+    },
+    sorts,
+    page_size: 1,
+  });
+
+  let page = emptyFeedbackRes.results[0] ?? null;
+
+  if (!page) {
+    // Fallback: most recent page with matching id regardless of feedback value
+    const anyRes = await notion.databases.query({
+      database_id: CORRECTIONS_DB_ID,
+      filter: { property: 'id', rich_text: { equals: id } },
+      sorts,
+      page_size: 1,
+    });
+    page = anyRes.results[0] ?? null;
+  }
+
   if (!page) {
     throw new Error(`Row with id "${id}" not found in Corrections Log`);
   }
@@ -298,7 +358,7 @@ async function updateCorrectionFeedback(id, feedback) {
  * @param {string} status  'pending' | 'approved' | 'skipped' | 'sent'
  */
 async function updateStatus(sheetName, id, status) {
-  const databaseId = sheetName === 'Opportunities' ? OPPORTUNITIES_DB_ID : LEADS_DB_ID;
+  const databaseId = resolveDatabase(sheetName);
   const page = await findPageById(databaseId, id);
   if (!page) {
     throw new Error(`Row with id "${id}" not found in sheet: ${sheetName}`);
@@ -314,7 +374,7 @@ async function updateStatus(sheetName, id, status) {
  * @param {string} draftText  New draft text content
  */
 async function updateDraftText(sheetName, id, draftText) {
-  const databaseId = sheetName === 'Opportunities' ? OPPORTUNITIES_DB_ID : LEADS_DB_ID;
+  const databaseId = resolveDatabase(sheetName);
   const page = await findPageById(databaseId, id);
   if (!page) {
     throw new Error(`Row with id "${id}" not found in sheet: ${sheetName}`);
@@ -330,7 +390,7 @@ async function updateDraftText(sheetName, id, draftText) {
  * @param {string} docLink  Notion or Google Docs URL for the exported draft
  */
 async function updateDraftDocLink(sheetName, id, docLink) {
-  const databaseId = sheetName === 'Opportunities' ? OPPORTUNITIES_DB_ID : LEADS_DB_ID;
+  const databaseId = resolveDatabase(sheetName);
   const page = await findPageById(databaseId, id);
   if (!page) {
     throw new Error(`Row with id "${id}" not found in sheet: ${sheetName}`);

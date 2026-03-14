@@ -14,13 +14,13 @@ const { Client } = require('@notionhq/client');
  *
  * Required environment variables:
  *  - NOTION_API_KEY              — Notion integration token (secret_…)
- *  - NOTION_OPPORTUNITIES_DB_ID  — 32-char Notion database ID
- *  - NOTION_LEADS_DB_ID          — 32-char Notion database ID
- *  - NOTION_CORRECTIONS_DB_ID    — 32-char Notion database ID
+ *  - NOTION_OPPORTUNITIES_DB_ID  — Notion database ID (hyphenated UUID or 32-hex form)
+ *  - NOTION_LEADS_DB_ID          — Notion database ID (hyphenated UUID or 32-hex form)
+ *  - NOTION_CORRECTIONS_DB_ID    — Notion database ID (hyphenated UUID or 32-hex form)
  *
- * The client is initialised lazily — missing env vars throw descriptive errors
- * only when the module is first required, so tests that mock env vars can set
- * them before requiring this module.
+ * All env vars are validated eagerly at module load time, so callers get a clear
+ * error message immediately on require() rather than an obscure SDK error on
+ * the first API call.
  */
 
 function requireEnv(name) {
