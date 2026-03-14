@@ -152,9 +152,9 @@ async function run() {
 
   try {
     const opps = await readOpportunities();
-    const found = opps.find((o) => o['Name'] === TEST_ID_OPP);
+    const found = opps.find((o) => o.id === TEST_ID_OPP);
     if (found) {
-      pass(`readOpportunities() found test page — status: "${found['Status']}"`);
+      pass(`readOpportunities() found test page — status: "${found.status}", org: "${found.org}"`);
     } else {
       fail('readOpportunities() did not return the test page');
     }
@@ -164,9 +164,9 @@ async function run() {
 
   try {
     const leads = await readLeads();
-    const found = leads.find((l) => l['Name'] === TEST_ID_LEAD);
+    const found = leads.find((l) => l.id === TEST_ID_LEAD);
     if (found) {
-      pass(`readLeads() found test page — status: "${found['Status']}"`);
+      pass(`readLeads() found test page — status: "${found.status}", funder: "${found.funder}"`);
     } else {
       fail('readLeads() did not return the test page');
     }
@@ -176,9 +176,9 @@ async function run() {
 
   try {
     const corrections = await readCorrections();
-    const found = corrections.find((c) => c['Name'] === TEST_ID_CORRECTION);
+    const found = corrections.find((c) => c.id === TEST_ID_CORRECTION);
     if (found) {
-      pass(`readCorrections() found test page — feedback: "${found['Feedback']}"`);
+      pass(`readCorrections() found test page — feedback: "${found.feedback}", item_type: "${found.item_type}"`);
     } else {
       fail('readCorrections() did not return the test page');
     }
