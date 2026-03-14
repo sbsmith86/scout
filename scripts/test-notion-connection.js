@@ -55,13 +55,13 @@ async function archivePage(pageId) {
 }
 
 /**
- * Finds the first page in a database where the 'id' rich-text property
+ * Finds the first page in a database where the 'Name' title property
  * equals the given value.  Returns null if not found.
  */
 async function findPageById(databaseId, id) {
   const res = await notion.databases.query({
     database_id: databaseId,
-    filter: { property: 'id', rich_text: { equals: id } },
+    filter: { property: 'Name', title: { equals: id } },
     page_size: 1,
   });
   return res.results[0] ?? null;
@@ -106,12 +106,12 @@ async function run() {
   try {
     await appendOpportunity({
       id: TEST_ID_OPP,
-      source: 'test',
+      source: 'Idealist',
       title: 'Connection test opportunity',
       org: 'Scout Test Org',
       url: 'https://example.com',
       score: 15,
-      confidence: 'high',
+      confidence: 'High',
     });
     pass(`appendOpportunity() → id: ${TEST_ID_OPP}`);
   } catch (err) {
@@ -127,7 +127,7 @@ async function run() {
       funding_date: new Date().toISOString().slice(0, 10),
       mission_summary: 'Connection test lead',
       score: 14,
-      confidence: 'medium',
+      confidence: 'High',
     });
     pass(`appendLead() → id: ${TEST_ID_LEAD}`);
   } catch (err) {
@@ -138,9 +138,9 @@ async function run() {
     await appendCorrection({
       id: TEST_ID_CORRECTION,
       item_id: TEST_ID_OPP,
-      item_type: 'opportunity',
+      item_type: 'Opportunity',
       filter_reason: 'Connection test correction entry',
-      feedback: 'good_filter',
+      feedback: 'Good_filter',
     });
     pass(`appendCorrection() → id: ${TEST_ID_CORRECTION}`);
   } catch (err) {
@@ -152,9 +152,9 @@ async function run() {
 
   try {
     const opps = await readOpportunities();
-    const found = opps.find((o) => o.id === TEST_ID_OPP);
+    const found = opps.find((o) => o['Name'] === TEST_ID_OPP);
     if (found) {
-      pass(`readOpportunities() found test page — status: "${found.status}"`);
+      pass(`readOpportunities() found test page — status: "${found['Status']}"`);
     } else {
       fail('readOpportunities() did not return the test page');
     }
@@ -164,9 +164,9 @@ async function run() {
 
   try {
     const leads = await readLeads();
-    const found = leads.find((l) => l.id === TEST_ID_LEAD);
+    const found = leads.find((l) => l['Name'] === TEST_ID_LEAD);
     if (found) {
-      pass(`readLeads() found test page — status: "${found.status}"`);
+      pass(`readLeads() found test page — status: "${found['Status']}"`);
     } else {
       fail('readLeads() did not return the test page');
     }
@@ -176,9 +176,9 @@ async function run() {
 
   try {
     const corrections = await readCorrections();
-    const found = corrections.find((c) => c.id === TEST_ID_CORRECTION);
+    const found = corrections.find((c) => c['Name'] === TEST_ID_CORRECTION);
     if (found) {
-      pass(`readCorrections() found test page — feedback: "${found.feedback}"`);
+      pass(`readCorrections() found test page — feedback: "${found['Feedback']}"`);
     } else {
       fail('readCorrections() did not return the test page');
     }

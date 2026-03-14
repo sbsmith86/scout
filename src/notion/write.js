@@ -6,23 +6,24 @@ const { notion, OPPORTUNITIES_DB_ID, LEADS_DB_ID, CORRECTIONS_DB_ID } = require(
 // Keep these in sync with the Notion database schemas.  The property names here
 // must match exactly (case-sensitive) what is configured in each database.
 
+// Property names must match the Notion database schemas exactly (case-sensitive).
+// These are the actual Notion property names as configured in the UI.
+
 const OPPORTUNITIES_HEADERS = [
-  'id', 'source', 'title', 'org', 'url', 'deadline', 'budget',
-  'score', 'confidence', 'surface_reason', 'description',
-  'contact_name', 'contact_title', 'contact_email', 'contact_linkedin',
-  'application_type', 'application_notes',
-  'status', 'date_surfaced', 'draft_text', 'draft_doc_link',
+  'Name', 'Source', 'Title', 'Organization', 'URL', 'Deadline', 'Budget',
+  'Score', 'Confidence', 'Surface Reason', 'Description',
+  'Status', 'Date Surfaced', 'Draft Text',
 ];
 
 const LEADS_HEADERS = [
-  'id', 'org', 'funder', 'funding_amount', 'funding_date', 'mission_summary',
-  'score', 'confidence', 'surface_reason',
-  'contact_name', 'contact_title', 'contact_email', 'contact_linkedin',
-  'status', 'date_surfaced', 'draft_text', 'draft_doc_link',
+  'Name', 'Organization', 'Funder', 'Funding Amount', 'Funding Date',
+  'Mission Summary', 'Score', 'Confidence', 'Surface Reason',
+  'Status', 'Date Surfaced', 'Draft Text',
 ];
 
 const CORRECTIONS_HEADERS = [
-  'id', 'item_id', 'item_type', 'title', 'org', 'source', 'filter_reason', 'feedback', 'date',
+  'Name', 'Item ID', 'Item Type', 'Title', 'Organization', 'Source',
+  'Filter Reason', 'Feedback', 'Date',
 ];
 
 // ── Property builder helpers ──────────────────────────────────────────────────
@@ -109,8 +110,8 @@ async function findPageById(databaseId, id) {
   const res = await notion.databases.query({
     database_id: databaseId,
     filter: {
-      property: 'id',
-      rich_text: { equals: id },
+      property: 'Name',
+      title: { equals: id },
     },
     page_size: 1,
   });
@@ -200,27 +201,20 @@ async function appendOpportunity(opportunity) {
   await notion.pages.create({
     parent: { database_id: OPPORTUNITIES_DB_ID },
     properties: {
-      title:              titleProp(opportunity.title),
-      id:                 text(opportunity.id),
-      source:             text(opportunity.source),
-      org:                text(opportunity.org),
-      url:                url(opportunity.url),
-      deadline:           date(opportunity.deadline),
-      budget:             text(opportunity.budget),
-      score:              number(opportunity.score),
-      confidence:         select(opportunity.confidence),
-      surface_reason:     text(opportunity.surface_reason),
-      description:        text(opportunity.description),
-      contact_name:       text(opportunity.contact_name),
-      contact_title:      text(opportunity.contact_title),
-      contact_email:      text(opportunity.contact_email),
-      contact_linkedin:   url(opportunity.contact_linkedin),
-      application_type:   text(opportunity.application_type),
-      application_notes:  text(opportunity.application_notes),
-      status:             select(opportunity.status ?? 'pending'),
-      date_surfaced:      text(opportunity.date_surfaced ?? new Date().toISOString()),
-      draft_text:         text(opportunity.draft_text),
-      draft_doc_link:     url(opportunity.draft_doc_link),
+      'Name':             titleProp(opportunity.id),
+      'Title':            text(opportunity.title),
+      'Source':           select(opportunity.source),
+      'Organization':     text(opportunity.org),
+      'URL':              url(opportunity.url),
+      'Deadline':         date(opportunity.deadline),
+      'Budget':           text(opportunity.budget),
+      'Score':            number(opportunity.score),
+      'Confidence':       select(opportunity.confidence),
+      'Surface Reason':   text(opportunity.surface_reason),
+      'Description':      text(opportunity.description),
+      'Status':           select(opportunity.status ?? 'Pending'),
+      'Date Surfaced':    date(opportunity.date_surfaced ?? new Date().toISOString()),
+      'Draft Text':       text(opportunity.draft_text),
     },
   });
 }
@@ -251,24 +245,18 @@ async function appendLead(lead) {
   await notion.pages.create({
     parent: { database_id: LEADS_DB_ID },
     properties: {
-      title:            titleProp(lead.org),
-      id:               text(lead.id),
-      org:              text(lead.org),
-      funder:           text(lead.funder),
-      funding_amount:   text(lead.funding_amount),
-      funding_date:     date(lead.funding_date),
-      mission_summary:  text(lead.mission_summary),
-      score:            number(lead.score),
-      confidence:       select(lead.confidence),
-      surface_reason:   text(lead.surface_reason),
-      contact_name:     text(lead.contact_name),
-      contact_title:    text(lead.contact_title),
-      contact_email:    text(lead.contact_email),
-      contact_linkedin: url(lead.contact_linkedin),
-      status:           select(lead.status ?? 'pending'),
-      date_surfaced:    text(lead.date_surfaced ?? new Date().toISOString()),
-      draft_text:       text(lead.draft_text),
-      draft_doc_link:   url(lead.draft_doc_link),
+      'Name':             titleProp(lead.id),
+      'Organization':     text(lead.org),
+      'Funder':           text(lead.funder),
+      'Funding Amount':   text(lead.funding_amount),
+      'Funding Date':     date(lead.funding_date),
+      'Mission Summary':  text(lead.mission_summary),
+      'Score':            number(lead.score),
+      'Confidence':       select(lead.confidence),
+      'Surface Reason':   text(lead.surface_reason),
+      'Status':           select(lead.status ?? 'Pending'),
+      'Date Surfaced':    date(lead.date_surfaced ?? new Date().toISOString()),
+      'Draft Text':       text(lead.draft_text),
     },
   });
 }
@@ -291,15 +279,15 @@ async function appendCorrection(correction) {
   await notion.pages.create({
     parent: { database_id: CORRECTIONS_DB_ID },
     properties: {
-      title:         titleProp(correction.title || correction.id),
-      id:            text(correction.id),
-      item_id:       text(correction.item_id),
-      item_type:     select(correction.item_type),
-      org:           text(correction.org),
-      source:        text(correction.source),
-      filter_reason: text(correction.filter_reason),
-      feedback:      select(correction.feedback),
-      date:          text(correction.date ?? new Date().toISOString()),
+      'Name':           titleProp(correction.title || correction.id),
+      'Item ID':        text(correction.item_id),
+      'Item Type':      select(correction.item_type),
+      'Title':          text(correction.title),
+      'Organization':   text(correction.org),
+      'Source':         select(correction.source),
+      'Filter Reason':  text(correction.filter_reason),
+      'Feedback':       select(correction.feedback),
+      'Date':           date(correction.date ?? new Date().toISOString()),
     },
   });
 }
@@ -323,8 +311,8 @@ async function updateCorrectionFeedback(id, feedback) {
     database_id: CORRECTIONS_DB_ID,
     filter: {
       and: [
-        { property: 'id', rich_text: { equals: id } },
-        { property: 'feedback', select: { is_empty: true } },
+        { property: 'Name', title: { equals: id } },
+        { property: 'Feedback', select: { is_empty: true } },
       ],
     },
     sorts,
@@ -337,7 +325,7 @@ async function updateCorrectionFeedback(id, feedback) {
     // Fallback: most recent page with matching id regardless of feedback value
     const anyRes = await notion.databases.query({
       database_id: CORRECTIONS_DB_ID,
-      filter: { property: 'id', rich_text: { equals: id } },
+      filter: { property: 'Name', title: { equals: id } },
       sorts,
       page_size: 1,
     });
@@ -347,7 +335,7 @@ async function updateCorrectionFeedback(id, feedback) {
   if (!page) {
     throw new Error(`Row with id "${id}" not found in Corrections Log`);
   }
-  await updatePageSelect(page.id, 'feedback', feedback);
+  await updatePageSelect(page.id, 'Feedback', feedback);
 }
 
 /**
@@ -363,11 +351,11 @@ async function updateStatus(sheetName, id, status) {
   if (!page) {
     throw new Error(`Row with id "${id}" not found in sheet: ${sheetName}`);
   }
-  await updatePageSelect(page.id, 'status', status);
+  await updatePageSelect(page.id, 'Status', status);
 }
 
 /**
- * Updates the draft_text of an existing Opportunities or Leads page.
+ * Updates the Draft Text of an existing Opportunities or Leads page.
  *
  * @param {'Opportunities'|'Leads'} sheetName
  * @param {string} id
@@ -379,26 +367,7 @@ async function updateDraftText(sheetName, id, draftText) {
   if (!page) {
     throw new Error(`Row with id "${id}" not found in sheet: ${sheetName}`);
   }
-  await updatePageProperty(page.id, 'draft_text', draftText);
-}
-
-/**
- * Updates the draft_doc_link of an existing Opportunities or Leads page.
- *
- * @param {'Opportunities'|'Leads'} sheetName
- * @param {string} id
- * @param {string} docLink  Notion or Google Docs URL for the exported draft
- */
-async function updateDraftDocLink(sheetName, id, docLink) {
-  const databaseId = resolveDatabase(sheetName);
-  const page = await findPageById(databaseId, id);
-  if (!page) {
-    throw new Error(`Row with id "${id}" not found in sheet: ${sheetName}`);
-  }
-  await notion.pages.update({
-    page_id: page.id,
-    properties: { draft_doc_link: url(docLink) },
-  });
+  await updatePageProperty(page.id, 'Draft Text', draftText);
 }
 
 module.exports = {
@@ -408,7 +377,6 @@ module.exports = {
   updateCorrectionFeedback,
   updateStatus,
   updateDraftText,
-  updateDraftDocLink,
   initializeHeaders,
   initializeAllHeaders,
   OPPORTUNITIES_HEADERS,

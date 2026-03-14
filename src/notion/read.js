@@ -83,7 +83,7 @@ async function readDatabase(databaseId, headers, filter) {
  */
 async function readOpportunities(status = null) {
   const filter = status
-    ? { property: 'status', select: { equals: status } }
+    ? { property: 'Status', select: { equals: status } }
     : undefined;
   return readDatabase(OPPORTUNITIES_DB_ID, OPPORTUNITIES_HEADERS, filter);
 }
@@ -97,7 +97,7 @@ async function readOpportunities(status = null) {
  */
 async function readLeads(status = null) {
   const filter = status
-    ? { property: 'status', select: { equals: status } }
+    ? { property: 'Status', select: { equals: status } }
     : undefined;
   return readDatabase(LEADS_DB_ID, LEADS_HEADERS, filter);
 }
@@ -111,7 +111,7 @@ async function readLeads(status = null) {
  */
 async function readCorrections(feedback = null) {
   const filter = feedback
-    ? { property: 'feedback', select: { equals: feedback } }
+    ? { property: 'Feedback', select: { equals: feedback } }
     : undefined;
   return readDatabase(CORRECTIONS_DB_ID, CORRECTIONS_HEADERS, filter);
 }

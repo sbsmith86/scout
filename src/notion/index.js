@@ -13,7 +13,6 @@ const {
   updateCorrectionFeedback,
   updateStatus,
   updateDraftText,
-  updateDraftDocLink,
   initializeHeaders,
   initializeAllHeaders,
 } = require('./write');
@@ -33,7 +32,6 @@ module.exports = {
   updateCorrectionFeedback,
   updateStatus,
   updateDraftText,
-  updateDraftDocLink,
   initializeHeaders,
   initializeAllHeaders,
   // Read
