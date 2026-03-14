@@ -36,6 +36,13 @@ const BASE_URL = 'https://www.idealist.org';
 // The old path may redirect, but using the current one avoids a round-trip.
 const SEARCH_URL = `${BASE_URL}/en/consulting`;
 
+/**
+ * Matches paths to individual consultant-org-job detail pages.
+ * Example: /en/consultant-org-job/abc123/some-title-slug
+ * Hoisted to module scope so it is compiled once, not on every link-scan call.
+ */
+const LISTING_PATH_RE = /\/en\/consultant-org-job\/([^/?#\s]+)/;
+
 /** Maximum pages to scrape per search term (polite ceiling). */
 const MAX_PAGES = 5;
 
@@ -257,9 +264,13 @@ function listingsFromHTML($) {
   const listings = [];
 
   // Try selector families most → least specific.
+  // Keep this list in sync with the cardSelectors list in src/health-check.js
+  // so that a health-check "pass" means the scraper can also find cards.
   const cardSelectors = [
     '[data-test="listing-card"]',
     '[data-qa-id="listing-card"]',
+    '[data-testid*="listing"]',
+    '[data-testid*="card"]',
     '[data-automation="listing-card"]',
     '.ListingCard',
     '.listing-card',
@@ -423,10 +434,6 @@ function listingsFromHTML($) {
 function listingsFromLinkScan($) {
   const listings = [];
   const seen = new Set();
-
-  // Regex that matches paths to individual consultant-org-job detail pages.
-  // Example: /en/consultant-org-job/abc123/some-title-slug
-  const LISTING_PATH_RE = /\/en\/consultant-org-job\/([^/?#\s]+)/;
 
   $('a[href]').each((_, el) => {
     const href = $(el).attr('href') || '';
