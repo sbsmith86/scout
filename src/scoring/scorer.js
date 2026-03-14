@@ -43,7 +43,9 @@ async function score(opportunity, profile, options = {}) {
     ? options.threshold
     : DEFAULT_PASS_THRESHOLD;
 
-  const client = new Anthropic();
+  const client = new Anthropic({
+    baseURL: 'https://api.anthropic.com',
+  });
 
   const prompt = buildPrompt(opportunity, profile);
 
