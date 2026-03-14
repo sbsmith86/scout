@@ -18,28 +18,10 @@
  *   NOTION_LEADS_DB_ID
  *   NOTION_CORRECTIONS_DB_ID
  *
- * Loads .env automatically via a lightweight inline parser (no dotenv dependency).
+ * Loads .env automatically via dotenv.
  */
 
-const fs = require('fs');
-const path = require('path');
-
-// ── Inline .env loader ────────────────────────────────────────────────────────
-const envFile = path.resolve(__dirname, '../.env');
-if (fs.existsSync(envFile)) {
-  const lines = fs.readFileSync(envFile, 'utf8').split('\n');
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith('#')) continue;
-    const eqIdx = trimmed.indexOf('=');
-    if (eqIdx === -1) continue;
-    const key = trimmed.slice(0, eqIdx).trim();
-    const val = trimmed.slice(eqIdx + 1).trim();
-    if (key && !(key in process.env)) {
-      process.env[key] = val;
-    }
-  }
-}
+require('dotenv').config();
 
 let notionModule;
 try {
