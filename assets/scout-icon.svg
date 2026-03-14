@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#e8f5e9"/>
+      <stop offset="100%" style="stop-color:#dcedc8"/>
+    </linearGradient>
+    <linearGradient id="diamondGreen" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#aed581"/>
+      <stop offset="50%" style="stop-color:#9ccc65"/>
+      <stop offset="100%" style="stop-color:#8bc34a"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background rounded square -->
+  <rect width="512" height="512" rx="96" fill="url(#bgGrad)"/>
+
+  <!-- Three stacked diamonds — HosTech mark, scaled up -->
+  <g transform="translate(256, 100)">
+    <!-- Outer diamond -->
+    <path d="M 0 0 L 56 42 L 0 98 L -56 42 Z" fill="url(#diamondGreen)" stroke="#1a1a1a" stroke-width="4" stroke-linejoin="miter"/>
+    <!-- Middle diamond -->
+    <path d="M 0 42 L 42 70 L 0 112 L -42 70 Z" fill="#9ccc65" stroke="#1a1a1a" stroke-width="3" stroke-linejoin="miter"/>
+    <!-- Inner diamond -->
+    <path d="M 0 70 L 28 88 L 0 120 L -28 88 Z" fill="#aed581" stroke="#1a1a1a" stroke-width="3" stroke-linejoin="miter"/>
+  </g>
+
+  <!-- Three small signal arcs on the right side — the "scanning" element -->
+  <g transform="translate(330, 160)">
+    <path d="M 0 0 Q 20 20 0 40" fill="none" stroke="#7cb342" stroke-width="4" stroke-linecap="round" opacity="0.8"/>
+    <path d="M 12 -8 Q 38 22 12 52" fill="none" stroke="#7cb342" stroke-width="4" stroke-linecap="round" opacity="0.5"/>
+    <path d="M 24 -16 Q 56 24 24 64" fill="none" stroke="#7cb342" stroke-width="4" stroke-linecap="round" opacity="0.3"/>
+  </g>
+
+  <!-- SCOUT text -->
+  <text x="256" y="340" font-family="'Righteous', system-ui, sans-serif" font-weight="400" font-size="80" fill="#1a1a1a" text-anchor="middle" letter-spacing="8">Scout</text>
+
+  <!-- Tagline in Space Mono style -->
+  <text x="256" y="380" font-family="'Space Mono', monospace, system-ui" font-weight="700" font-size="16" fill="#7cb342" text-anchor="middle" letter-spacing="4">AI BIZ-DEV PIPELINE</text>
+
+  <!-- HosTechnology attribution -->
+  <text x="256" y="440" font-family="'Righteous', system-ui, sans-serif" font-weight="400" font-size="24" fill="#1a1a1a" text-anchor="middle" letter-spacing="2" opacity="0.5">HosTechnology</text>
+</svg>
