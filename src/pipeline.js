@@ -443,7 +443,7 @@ async function runPipeline(options = {}) {
   );
 
   // ── 6. Initialize Notion databases and write surfaced items ──────────────
-  console.log('[pipeline] Initializing Notion database headers...');
+  console.log('[pipeline] Verifying Notion database connectivity...');
   await initializeAllHeaders();
 
   let notionWritten = 0;
