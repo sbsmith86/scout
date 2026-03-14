@@ -162,11 +162,27 @@ async function initializeHeaders(_sheetName) {
 }
 
 /**
- * No-op for Notion — database schemas are managed in the Notion UI.
+ * Verifies that all three Notion databases are reachable.
+ * Logs a clear error for any database that cannot be retrieved.
  * Provided for interface compatibility with sheets/write.js.
  */
 async function initializeAllHeaders() {
-  // Notion database schemas are configured in the Notion UI, not in code.
+  const checks = [
+    { label: 'Opportunities',  id: OPPORTUNITIES_DB_ID, envVar: 'NOTION_OPPORTUNITIES_DB_ID' },
+    { label: 'Leads',          id: LEADS_DB_ID,          envVar: 'NOTION_LEADS_DB_ID' },
+    { label: 'Corrections Log', id: CORRECTIONS_DB_ID,   envVar: 'NOTION_CORRECTIONS_DB_ID' },
+  ];
+
+  await Promise.all(checks.map(async ({ label, id, envVar }) => {
+    try {
+      await notion.databases.retrieve({ database_id: id });
+    } catch (err) {
+      console.error(
+        `[notion] ✗ ${label} database (${id}) is not reachable: ${err.message}. ` +
+        `Check ${envVar} in .env and ensure the integration has been shared with the database.`
+      );
+    }
+  }));
 }
 
 // ── Write functions ───────────────────────────────────────────────────────────
@@ -198,6 +214,12 @@ async function initializeAllHeaders() {
  * @param {string} [opportunity.draft_doc_link]
  */
 async function appendOpportunity(opportunity) {
+  const existing = await findPageById(OPPORTUNITIES_DB_ID, opportunity.id);
+  if (existing) {
+    console.log(`[notion] Skipping duplicate opportunity: ${opportunity.id}`);
+    return;
+  }
+
   await notion.pages.create({
     parent: { database_id: OPPORTUNITIES_DB_ID },
     properties: {
@@ -242,6 +264,12 @@ async function appendOpportunity(opportunity) {
  * @param {string} [lead.draft_doc_link]
  */
 async function appendLead(lead) {
+  const existing = await findPageById(LEADS_DB_ID, lead.id);
+  if (existing) {
+    console.log(`[notion] Skipping duplicate lead: ${lead.id}`);
+    return;
+  }
+
   await notion.pages.create({
     parent: { database_id: LEADS_DB_ID },
     properties: {
@@ -279,7 +307,7 @@ async function appendCorrection(correction) {
   await notion.pages.create({
     parent: { database_id: CORRECTIONS_DB_ID },
     properties: {
-      'Name':           titleProp(correction.title || correction.id),
+      'Name':           titleProp(correction.id),
       'Item ID':        text(correction.item_id),
       'Item Type':      select(correction.item_type),
       'Title':          text(correction.title),
