@@ -25,17 +25,15 @@ const crypto = require('crypto');
 //   • Borealis Philanthropy funds racial justice orgs (a core HosTech target
 //     sector).  Small-to-mid orgs that receive Borealis grants typically lack
 //     tech capacity — exactly HosTech's market.
-//   • Astraea Foundation is one of the largest LGBTQ+-specific funders.  Grantee
-//     orgs are small and grassroots — prime warm-lead territory.
 //   • Knight Foundation funds civic/community tech at the local level, surfacing
 //     newly-funded orgs that are explicitly building tech capacity.
-//   • Mozilla Foundation awards grants for open-web and digital-equity work,
-//     frequently to nonprofits and grassroots orgs without in-house tech staff.
 //
 // Feeds that were removed:
 //   • philanthropynewsdigest.org/feeds/grants — 301 redirect to HTML blog page.
 //   • macfound.org/feeds/grants/ — redirect chain, grants-specific feed broken.
 //   • hewlett.org/grants/feed/ — returns HTML webpage, not RSS/Atom XML.
+//   • Astraea Foundation (astraeafoundation.org/feed/) — feed broken/unreachable.
+//   • Mozilla Foundation (foundation.mozilla.org/en/blog/feed/rss/) — feed broken/unreachable.
 //
 // Investigated but not adopted:
 //   • Candid Social Sector News API (developer.candid.org) — investigated as a
@@ -72,25 +70,11 @@ const FEEDS = [
     url: 'https://borealisphilanthropy.org/feed/',
   },
   {
-    // Astraea Foundation for Justice — LGBTQ+-specific global funder.
-    // Grantee orgs are small and typically have no dedicated tech staff.
-    id: 'astraea-foundation',
-    name: 'Astraea Foundation',
-    url: 'https://astraeafoundation.org/feed/',
-  },
-  {
     // Knight Foundation — civic/community-tech funder; grants frequently go to
     // local nonprofits building digital capacity who need outside tech help.
     id: 'knight-foundation',
     name: 'Knight Foundation',
     url: 'https://knightfoundation.org/feed/',
-  },
-  {
-    // Mozilla Foundation — open-web and digital-equity grants; grantees are
-    // often small nonprofits or projects without in-house tech teams.
-    id: 'mozilla-foundation',
-    name: 'Mozilla Foundation',
-    url: 'https://foundation.mozilla.org/en/blog/feed/rss/',
   },
 ];
 

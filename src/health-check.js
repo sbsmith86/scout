@@ -6,17 +6,15 @@
  * Performs lightweight validation of every registered source plugin without
  * running the full fetch pipeline.  Each source type has its own check:
  *
- *   RSS feeds (foundation-rss feeds, rfpdb RSS probe):
+ *   RSS feeds (foundation-rss feeds):
  *     • HTTP GET the feed URL → verify HTTP 200
  *     • Log redirect chain when redirects occur
  *     • Verify Content-Type is XML-like (not HTML)
  *     • Parse with rss-parser and confirm items.length > 0
  *
- *   Scrape / static sources (Idealist, PND RFPs, RFPDB):
+ *   Scrape / static sources (Idealist):
  *     • For Idealist: open with Playwright, verify HTTP 200, check for listing
  *       links/elements (Idealist no longer uses Next.js __NEXT_DATA__ SSR embedding)
- *     • For PND RFPs: HTTP GET, verify HTTP 200, check listing element present
- *     • For RFPDB: HTTP GET tech-category page, verify HTTP 200, check listings
  *
  * Usage:
  *   const { runHealthChecks, printHealthReport } = require('./health-check');
@@ -27,17 +25,10 @@
 const https = require('https');
 const http = require('http');
 const RSSParser = require('rss-parser');
-const cheerio = require('cheerio');
 
 // Import constants from source plugins to avoid duplication.
 const { FEEDS: FOUNDATION_FEEDS } = require('./sources/foundation-rss');
-const {
-  CANDIDATE_FEED_URLS: RFPDB_CANDIDATE_FEED_URLS,
-  FEEDS_PAGE_URL: RFPDB_FEEDS_PAGE_URL,
-  TECH_CATEGORY_URL: RFPDB_TECH_CATEGORY_URL,
-} = require('./sources/rfpdb');
 
-const PND_RFPS_URL        = 'https://philanthropynewsdigest.org/rfps';
 // Algolia credentials for Idealist health check (public, embedded in their frontend).
 const ALGOLIA_APP_ID    = 'NSV3AUESS7';
 const ALGOLIA_SEARCH_KEY = 'c2730ea10ab82787f2f3cc961e8c1e06';
@@ -209,127 +200,7 @@ async function checkFoundationRss() {
   return results;
 }
 
-/**
- * Health check for RFPDB.com.
- * Probes the candidate RSS feed URLs first; if none return valid XML falls
- * back to verifying the technology category page is accessible and contains
- * listing elements.
- *
- * @returns {Promise<{id:string, name:string, pass:boolean, reason:string}>}
- */
-async function checkRfpdb() {
-  const id   = 'rfpdb';
-  const name = 'RFPDB.com';
-
-  // ── 1. Probe candidate RSS feed URLs ──────────────────────────────────────
-  // Try the feed discovery page for a tech feed link first.
-  let feedUrl = null;
-  try {
-    const { statusCode, body } = await fetchRaw(RFPDB_FEEDS_PAGE_URL);
-    if (statusCode === 200 && body) {
-      const $ = cheerio.load(body);
-      $('a[href]').each((_, el) => {
-        if (feedUrl) return;
-        const href = $(el).attr('href') || '';
-        const abs  = href.startsWith('http') ? href : new URL(href, 'https://www.rfpdb.com').toString();
-        if (/technology/i.test(abs) && /feed|rss|atom/i.test(abs)) {
-          feedUrl = abs;
-        }
-      });
-    }
-  } catch {
-    // ignore — fall through to candidate probes
-  }
-
-  // Probe candidate URLs if discovery page didn't help.
-  if (!feedUrl) {
-    for (const candidate of RFPDB_CANDIDATE_FEED_URLS) {
-      try {
-        const { statusCode, contentType, body } = await fetchRaw(candidate);
-        if (statusCode === 200 && (hasXmlContentType(contentType) || looksLikeXml(body))) {
-          feedUrl = candidate;
-          break;
-        }
-      } catch {
-        // try next candidate
-      }
-    }
-  }
-
-  if (feedUrl) {
-    // We found a working RSS URL — report how many items it has.
-    const rssResult = await checkRssFeed(name, feedUrl);
-    rssResult.id = id;
-    if (rssResult.pass) {
-      rssResult.reason = `RSS feed OK, ${rssResult.reason}`;
-    }
-    return rssResult;
-  }
-
-  // ── 2. Fallback: verify the tech-category scrape page ────────────────────
-  let raw;
-  try {
-    raw = await fetchRaw(RFPDB_TECH_CATEGORY_URL);
-  } catch (err) {
-    return { id, name, pass: false, reason: `Network error: ${err.message}` };
-  }
-
-  const { statusCode, body, redirectChain } = raw;
-  const redirectNote = redirectChain.length > 0 ? ` (redirected)` : '';
-
-  if (statusCode !== 200) {
-    return { id, name, pass: false, reason: `HTTP ${statusCode}${redirectNote}` };
-  }
-
-  const $ = cheerio.load(body);
-  // RFPDB technology category page should have at least one RFP-detail link.
-  const rfpLinks = $('a[href*="/rfps/"], a[href*="/rfp/"], a[href*="/view/rfp/"]').length;
-  if (rfpLinks === 0) {
-    return { id, name, pass: false, reason: `no RSS feed found, page loaded but no listing links detected${redirectNote}` };
-  }
-
-  return { id, name, pass: true, reason: `no RSS feed found, page loads, ${rfpLinks} listing link(s) detected${redirectNote}` };
-}
-
-/**
- * Health check for PND RFPs (philanthropynewsdigest.org/rfps).
- * HTTP GET the page, verify 200, look for listing elements.
- *
- * @returns {Promise<{id:string, name:string, pass:boolean, reason:string}>}
- */
-async function checkPndRfps() {
-  const id   = 'pnd-rfps';
-  const name = 'PND RFPs (Candid)';
-
-  let raw;
-  try {
-    raw = await fetchRaw(PND_RFPS_URL);
-  } catch (err) {
-    return { id, name, pass: false, reason: `Network error: ${err.message}` };
-  }
-
-  const { statusCode, body, redirectChain } = raw;
-  const redirectNote = redirectChain.length > 0 ? ` (redirected)` : '';
-
-  if (statusCode !== 200) {
-    return { id, name, pass: false, reason: `HTTP ${statusCode}${redirectNote}` };
-  }
-
-  const $ = cheerio.load(body);
-
-  // A stable indicator that RFP listings are present: any link that points to
-  // an /rfps/ detail page.  This is simpler than the full multi-selector
-  // chain used by the source plugin and is less likely to break if minor
-  // CSS class changes occur.
-  const rfpLinks = $('a[href*="/rfps/"]').length;
-
-  if (rfpLinks === 0) {
-    return { id, name, pass: false, reason: `page loaded (HTTP 200) but no RFP listing links found${redirectNote}` };
-  }
-
-  const redirectSuffix = redirectChain.length > 0 ? ` (${redirectChain.length} redirect(s))` : '';
-  return { id, name, pass: true, reason: `page loads, ${rfpLinks} RFP listing link(s) found${redirectSuffix}` };
-}
+// ── Individual check functions ────────────────────────────────────────────────
 
 /**
  * Health check for Idealist.org.
@@ -406,12 +277,6 @@ async function runHealthChecks() {
   // Idealist (Playwright scrape)
   results.push(await checkIdealist());
 
-  // PND RFPs (https scrape)
-  results.push(await checkPndRfps());
-
-  // RFPDB (RSS-first, scrape fallback)
-  results.push(await checkRfpdb());
-
   // Foundation RSS feeds (one result per feed)
   const rssResults = await checkFoundationRss();
   results.push(...rssResults);
@@ -429,9 +294,9 @@ async function runHealthChecks() {
  *     Scout Source Health Check
  *   ══════════════════════════════════════════
  *     ✓ Idealist.org          — page loads, data markers found
- *     ✗ RFPDB.com             — HTTP 403 (blocked)
+ *     ✗ Knight Foundation     — HTTP 404
  *   ══════════════════════════════════════════
- *     4/6 sources healthy
+ *     2/3 sources healthy
  *   ══════════════════════════════════════════
  *
  * @param {Array<{id:string, name:string, pass:boolean, reason:string}>} results
@@ -462,4 +327,4 @@ function printHealthReport(results) {
   console.log('');
 }
 
-module.exports = { runHealthChecks, printHealthReport, checkIdealist, checkPndRfps, checkRfpdb, checkFoundationRss };
+module.exports = { runHealthChecks, printHealthReport, checkIdealist, checkFoundationRss };
