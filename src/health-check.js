@@ -201,7 +201,6 @@ async function checkFoundationRss() {
   return results;
 }
 
-// ── Individual check functions ────────────────────────────────────────────────
 
 /**
  * Health check for Idealist.org.
