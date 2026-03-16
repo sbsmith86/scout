@@ -104,7 +104,7 @@ async function run() {
   if (idealist.name !== 'Idealist.org') fail(`name should be "Idealist.org" (got ${idealist.name})`);
   else pass(`name: "${idealist.name}"`);
 
-  if (idealist.type !== 'scrape') fail(`type should be "scrape" (got ${idealist.type})`);
+  if (!['scrape', 'api'].includes(idealist.type)) fail(`type should be "scrape" or "api" (got ${idealist.type})`);
   else pass(`type: "${idealist.type}"`);
 
   if (typeof idealist.fetch !== 'function') fail('fetch must be a function');

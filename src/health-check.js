@@ -38,8 +38,11 @@ const {
 } = require('./sources/rfpdb');
 
 const PND_RFPS_URL        = 'https://philanthropynewsdigest.org/rfps';
-// Idealist migrated away from Next.js; use the /en/consulting path (q= to get real results).
-const IDEALIST_SEARCH_URL = 'https://www.idealist.org/en/consulting?q=automation';
+// Algolia credentials for Idealist health check (public, embedded in their frontend).
+const ALGOLIA_APP_ID    = 'NSV3AUESS7';
+const ALGOLIA_SEARCH_KEY = 'c2730ea10ab82787f2f3cc961e8c1e06';
+const ALGOLIA_INDEX     = 'idealist7-production';
+const ALGOLIA_HOST      = `${ALGOLIA_APP_ID.toLowerCase()}-dsn.algolia.net`;
 
 /** Content-type substrings that indicate genuine RSS/Atom XML. */
 const XML_CONTENT_TYPES = [
@@ -331,13 +334,8 @@ async function checkPndRfps() {
 /**
  * Health check for Idealist.org.
  *
- * Uses Playwright to load the JS-rendered page, then verifies the page is
- * accessible and contains consulting opportunity listings.
- *
- * NOTE: Idealist.org no longer embeds a Next.js `__NEXT_DATA__` SSR blob.
- * The check looks for links to individual listing detail pages
- * (`/en/consultant-org-job/…`) and common listing card elements instead.
- * `__NEXT_DATA__` is treated as an optional fast-path signal if present.
+ * Queries the Algolia search API directly for CONTRACT job listings.
+ * Much faster and more reliable than loading the JS-rendered page.
  *
  * @returns {Promise<{id:string, name:string, pass:boolean, reason:string}>}
  */
@@ -345,80 +343,48 @@ async function checkIdealist() {
   const id   = 'idealist';
   const name = 'Idealist.org';
 
-  let chromium;
   try {
-    ({ chromium } = require('playwright'));
-  } catch (err) {
-    return { id, name, pass: false, reason: `Playwright not available: ${err.message}` };
-  }
+    const result = await new Promise((resolve, reject) => {
+      const body = JSON.stringify({
+        query: '',
+        hitsPerPage: 1,
+        facetFilters: [['type:JOB'], ['jobType:CONTRACT']],
+        attributesToRetrieve: ['name'],
+      });
 
-  let browser;
-  try {
-    browser = await chromium.launch({ headless: true });
-    const page = await browser.newPage();
+      const options = {
+        hostname: ALGOLIA_HOST,
+        path: `/1/indexes/${ALGOLIA_INDEX}/query`,
+        method: 'POST',
+        headers: {
+          'X-Algolia-Application-Id': ALGOLIA_APP_ID,
+          'X-Algolia-API-Key': ALGOLIA_SEARCH_KEY,
+          'Content-Type': 'application/json',
+        },
+        timeout: 10000,
+      };
 
-    const response = await page.goto(IDEALIST_SEARCH_URL, {
-      waitUntil: 'networkidle',
-      timeout: 30000,
+      const req = https.request(options, (res) => {
+        let data = '';
+        res.on('data', (chunk) => { data += chunk; });
+        res.on('end', () => {
+          try { resolve(JSON.parse(data)); }
+          catch (err) { reject(new Error(`JSON parse error: ${err.message}`)); }
+        });
+      });
+      req.on('error', reject);
+      req.on('timeout', () => { req.destroy(); reject(new Error('Request timed out')); });
+      req.write(body);
+      req.end();
     });
 
-    const statusCode = response ? response.status() : 0;
-
-    if (statusCode !== 200) {
-      return { id, name, pass: false, reason: `HTTP ${statusCode}` };
+    if (result.nbHits > 0) {
+      return { id, name, pass: true, reason: `Algolia API reachable, ${result.nbHits} contract listing(s) in index` };
     }
 
-    const html = await page.content();
-    const $    = cheerio.load(html);
-
-    // ── 1. Links to individual listing detail pages ──────────────────────────
-    // These are the most reliable indicator: any page listing consultant jobs
-    // will have <a href="/en/consultant-org-job/…"> links regardless of
-    // which frontend framework Idealist is currently using.
-    const listingLinks = $('a[href*="/consultant-org-job/"]').length;
-    if (listingLinks > 0) {
-      return { id, name, pass: true, reason: `page loads, ${listingLinks} listing link(s) found` };
-    }
-
-    // ── 2. Listing card elements via CSS selectors ────────────────────────────
-    const cardSelectors = [
-      '[data-test="listing-card"]',
-      '[data-qa-id="listing-card"]',
-      '[data-testid*="listing"]',
-      '[data-testid*="card"]',
-      '[data-automation="listing-card"]',
-      '.ListingCard',
-      '.listing-card',
-      'article[class*="ListingCard"]',
-      'article[class*="listing"]',
-      'li[class*="SearchResult"]',
-      'li[class*="listing"]',
-    ];
-    for (const sel of cardSelectors) {
-      const count = $(sel).length;
-      if (count > 0) {
-        return { id, name, pass: true, reason: `page loads, ${count} listing card element(s) found (${sel})` };
-      }
-    }
-
-    // ── 3. __NEXT_DATA__ fast-path (optional — kept for forward-compatibility) ─
-    const nextDataRaw = $('#__NEXT_DATA__').html();
-    if (nextDataRaw && nextDataRaw.length > 50) {
-      return { id, name, pass: true, reason: 'page loads, __NEXT_DATA__ present' };
-    }
-
-    return {
-      id,
-      name,
-      pass: false,
-      reason: 'page loaded (HTTP 200) but no listing elements or links detected — scraper selectors may need updating',
-    };
+    return { id, name, pass: false, reason: 'Algolia API reachable but 0 contract listings found' };
   } catch (err) {
-    return { id, name, pass: false, reason: `Playwright error: ${err.message}` };
-  } finally {
-    if (browser) {
-      try { await browser.close(); } catch { /* ignore */ }
-    }
+    return { id, name, pass: false, reason: `Algolia API error: ${err.message}` };
   }
 }
 
