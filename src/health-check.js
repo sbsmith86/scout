@@ -13,10 +13,10 @@
  *     • Verify Content-Type is XML-like (not HTML)
  *     • Parse with rss-parser and confirm items.length > 0
  *
- *   Scrape / static sources (Idealist):
- *     • For Idealist: open with Playwright, verify HTTP 200, check for listing
- *       links/elements (Idealist no longer uses Next.js __NEXT_DATA__ SSR embedding)
- *
+ *   API-based sources (Idealist via Algolia):
+ *     • For Idealist: query the Algolia search index over HTTPS using the public
+ *       app ID, search key, and index name, verify HTTP 200, and confirm that
+ *       the response contains at least one hit.
  * Usage:
  *   const { runHealthChecks, printHealthReport } = require('./health-check');
  *   const results = await runHealthChecks();
