@@ -274,7 +274,7 @@ async function checkIdealist() {
 async function runHealthChecks() {
   const results = [];
 
-  // Idealist (Playwright scrape)
+  // Idealist (Algolia API health check)
   results.push(await checkIdealist());
 
   // Foundation RSS feeds (one result per feed)
