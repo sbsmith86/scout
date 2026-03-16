@@ -3,8 +3,9 @@
 /**
  * Scout source health checker.
  *
- * Performs lightweight validation of every registered source plugin without
- * running the full fetch pipeline.  Each source type has its own check:
+ * Performs lightweight validation of the currently supported source plugins
+ * (Idealist and foundation RSS feeds) without running the full fetch pipeline.
+ * It currently implements two checks:
  *
  *   RSS feeds (foundation-rss feeds):
  *     • HTTP GET the feed URL → verify HTTP 200
