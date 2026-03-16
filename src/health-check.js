@@ -293,7 +293,7 @@ async function runHealthChecks() {
  *   ══════════════════════════════════════════
  *     Scout Source Health Check
  *   ══════════════════════════════════════════
- *     ✓ Idealist.org          — page loads, data markers found
+ *     ✓ Idealist.org          — Algolia API reachable, sample search returned results
  *     ✗ Knight Foundation     — HTTP 404
  *   ══════════════════════════════════════════
  *     2/3 sources healthy
