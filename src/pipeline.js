@@ -24,12 +24,6 @@ const crypto = require('crypto');
 
 const sources = require('./sources');
 const { disqualify, score } = require('./scoring');
-const {
-  initializeAllHeaders,
-  appendOpportunity,
-  appendLead,
-  appendCorrection,
-} = require('./notion');
 const { sendRunSummaryEmail } = require('./notifications');
 const { runHealthChecks } = require('./health-check');
 
@@ -443,6 +437,16 @@ async function runPipeline(options = {}) {
   );
 
   // ── 6. Initialize Notion databases and write surfaced items ──────────────
+  // Lazy-require notion so that loading this module (e.g. for intervalElapsed
+  // or the `check` command) does not trigger NOTION_API_KEY validation at
+  // module load time — credentials are only needed when actually writing.
+  const {
+    initializeAllHeaders,
+    appendOpportunity,
+    appendLead,
+    appendCorrection,
+  } = require('./notion');
+
   console.log('[pipeline] Verifying Notion database connectivity...');
   await initializeAllHeaders();
 
