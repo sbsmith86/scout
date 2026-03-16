@@ -4,8 +4,6 @@
 
 require('dotenv').config();
 
-const { runPipeline } = require('./pipeline');
-const { startDashboard } = require('./dashboard');
 const { runHealthChecks, printHealthReport } = require('./health-check');
 
 const [, , command] = process.argv;
@@ -14,11 +12,13 @@ async function main() {
   switch (command) {
     case 'run': {
       console.log('[scout] Starting full pipeline run...');
+      const { runPipeline } = require('./pipeline');
       await runPipeline();
       break;
     }
     case 'fetch': {
       console.log('[scout] Fetch-only run (no scoring, no Sheets write)...');
+      const { runPipeline } = require('./pipeline');
       await runPipeline({ fetchOnly: true });
       break;
     }
@@ -31,6 +31,7 @@ async function main() {
       break;
     }
     case 'dashboard': {
+      const { startDashboard } = require('./dashboard');
       startDashboard();
       break;
     }
