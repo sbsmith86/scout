@@ -348,6 +348,35 @@ function renderPage() {
     .btn-sent    { background: #6b7280; color: #fff; font-size: 12px; padding: 5px 10px; }
     .btn-sent:hover:not(:disabled)    { background: #4b5563; }
 
+    /* ── Contact block ───────────────────────────────────────── */
+    .contact-block {
+      margin-top: 10px;
+      padding: 8px 12px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 12px;
+      color: var(--text);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px 16px;
+      align-items: center;
+    }
+    .contact-block strong { color: var(--text-muted); font-weight: 600; margin-right: 2px; }
+    .contact-block a { color: var(--accent); text-decoration: none; }
+    .contact-block a:hover { text-decoration: underline; }
+    .contact-conf-badge {
+      font-size: 10px;
+      font-weight: 700;
+      border-radius: 8px;
+      padding: 1px 6px;
+      margin-left: auto;
+      flex-shrink: 0;
+    }
+    .contact-conf-high { background: var(--badge-high-bg); color: var(--badge-high); }
+    .contact-conf-medium { background: #fef9c3; color: #854d0e; }
+    .contact-conf-low { background: var(--badge-low-bg); color: var(--badge-low); }
+
     /* ── Approved queue ──────────────────────────────────────── */
     .approved-queue {
       background: #f0fdf4;
@@ -591,6 +620,33 @@ function renderPage() {
     return \`<div class="score-bar"><div class="score-fill" style="width:\${pct}%"></div></div>\`;
   }
 
+  // ── Contact block helper ─────────────────────────────────────────────────
+  function contactBlock(item) {
+    const hasContact = item.contact_name || item.contact_title || item.contact_email || item.contact_linkedin;
+    if (!hasContact) return '';
+    // Derive contact confidence from available fields (stored resolver confidence
+    // is not a separate Notion property, so we infer it here).
+    const hasEmail = Boolean(item.contact_email);
+    const hasName = Boolean(item.contact_name);
+    const contactConf = hasEmail && hasName ? 'high' : (hasEmail || hasName || item.contact_linkedin) ? 'medium' : 'low';
+    const confClass = contactConf === 'high' ? 'contact-conf-high'
+      : contactConf === 'medium' ? 'contact-conf-medium'
+      : 'contact-conf-low';
+    const namePart = item.contact_name
+      ? \`<span><strong>Contact:</strong> \${esc(item.contact_name)}\${item.contact_title ? \`, \${esc(item.contact_title)}\` : ''}</span>\`
+      : '';
+    const emailPart = item.contact_email
+      ? \`<span><strong>Email:</strong> <a href="mailto:\${esc(item.contact_email)}">\${esc(item.contact_email)}</a></span>\`
+      : '';
+    const linkedinPart = item.contact_linkedin
+      ? \`<span><a href="\${esc(item.contact_linkedin)}" target="_blank" rel="noopener">LinkedIn ↗</a></span>\`
+      : '';
+    return \`<div class="contact-block">
+  \${namePart}\${emailPart}\${linkedinPart}
+  <span class="contact-conf-badge \${confClass}">\${esc(contactConf)} contact</span>
+</div>\`;
+  }
+
   // ── Opportunity card ──────────────────────────────────────────────────────
   function oppCard(item, idx) {
     const isLow = item.confidence === 'low';
@@ -615,6 +671,7 @@ function renderPage() {
     <span class="score-pill">\${scoreBar(item.score)} <strong>\${esc(item.score)}/20</strong></span>
   </div>
   \${hasSurface ? \`<div class="surface-reason">"\${esc(item.surface_reason)}"</div>\` : ''}
+  \${contactBlock(item)}
   \${hasDesc ? \`
   <button class="expand-btn" onclick="toggleDesc(this)" data-idx="\${idx}">▸ Show description</button>
   <div class="description-preview" id="desc-opp-\${idx}">\${esc(item.description)}</div>
@@ -649,6 +706,7 @@ function renderPage() {
     <span class="score-pill">\${scoreBar(item.score)} <strong>\${esc(item.score)}/20</strong></span>
   </div>
   \${hasSurface ? \`<div class="surface-reason">"\${esc(item.surface_reason)}"</div>\` : ''}
+  \${contactBlock(item)}
   \${hasDesc ? \`
   <button class="expand-btn" onclick="toggleDesc(this)" data-idx="\${idx}">▸ Show summary</button>
   <div class="description-preview" id="desc-lead-\${idx}">\${esc(item.mission_summary)}</div>

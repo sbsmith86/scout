@@ -161,9 +161,10 @@ function dedupeKey(item) {
  *
  * @param {object} item
  * @param {object} scoreResult
+ * @param {object|null} contact   Resolved contact object (from contacts/resolver).
  * @returns {object}
  */
-function buildOpportunityRecord(item, scoreResult) {
+function buildOpportunityRecord(item, scoreResult, contact) {
   return {
     id: item.id ?? '',
     source: item.source ?? '',
@@ -176,11 +177,11 @@ function buildOpportunityRecord(item, scoreResult) {
     confidence: scoreResult.confidence,
     surface_reason: scoreResult.surface_reason ?? '',
     description: item.description ? item.description.slice(0, 500) : '',
-    // Contact fields — populated by Phase 2 contact resolution.
-    contact_name: '',
-    contact_title: '',
-    contact_email: '',
-    contact_linkedin: '',
+    // Contact fields — populated by contact resolver (empty when resolution fails).
+    contact_name: contact && contact.name !== 'unknown' ? contact.name : '',
+    contact_title: contact && contact.title !== 'unknown' ? contact.title : '',
+    contact_email: contact && contact.email !== 'unknown' ? contact.email : '',
+    contact_linkedin: contact ? (contact.linkedin_url || '') : '',
     // Application process fields — populated by Phase 2 discovery.
     application_type: '',
     application_notes: '',
@@ -195,9 +196,10 @@ function buildOpportunityRecord(item, scoreResult) {
  *
  * @param {object} item
  * @param {object} scoreResult
+ * @param {object|null} contact   Resolved contact object (from contacts/resolver).
  * @returns {object}
  */
-function buildLeadRecord(item, scoreResult) {
+function buildLeadRecord(item, scoreResult, contact) {
   return {
     id: item.id ?? '',
     org: item.org ?? '',
@@ -208,11 +210,11 @@ function buildLeadRecord(item, scoreResult) {
     score: scoreResult.overall,
     confidence: scoreResult.confidence,
     surface_reason: scoreResult.surface_reason ?? '',
-    // Contact fields — populated by Phase 2 contact resolution.
-    contact_name: '',
-    contact_title: '',
-    contact_email: '',
-    contact_linkedin: '',
+    // Contact fields — populated by contact resolver (empty when resolution fails).
+    contact_name: contact && contact.name !== 'unknown' ? contact.name : '',
+    contact_title: contact && contact.title !== 'unknown' ? contact.title : '',
+    contact_email: contact && contact.email !== 'unknown' ? contact.email : '',
+    contact_linkedin: contact ? (contact.linkedin_url || '') : '',
     status: 'pending',
     date_surfaced: new Date().toISOString(),
     draft_doc_link: '',
@@ -436,6 +438,30 @@ async function runPipeline(options = {}) {
     `Total filtered: ${filteredItems.length}`
   );
 
+  // ── 5.5. Contact resolution ────────────────────────────────────────────────
+  // Lazy-require contacts so loading the pipeline module (e.g. for health checks)
+  // doesn't fail if cheerio or other deps are unavailable.
+  if (surfacedItems.length > 0) {
+    console.log(`[pipeline] Resolving contacts for ${surfacedItems.length} surfaced item(s)...`);
+    const { resolveContact } = require('./contacts');
+
+    for (const entry of surfacedItems) {
+      try {
+        entry.contact = await resolveContact(entry.item);
+        const c = entry.contact;
+        const nameStr = c.name !== 'unknown' ? c.name : '(not found)';
+        console.log(
+          `[pipeline] Contact: "${entry.item.title}" — ${nameStr} (${c.confidence})`
+        );
+      } catch (err) {
+        console.warn(
+          `[pipeline] Contact resolution failed for "${entry.item.title}": ${err.message}`
+        );
+        entry.contact = null;
+      }
+    }
+  }
+
   // ── 6. Initialize Notion databases and write surfaced items ──────────────
   // Lazy-require notion so that loading this module (e.g. for intervalElapsed
   // or the `check` command) does not trigger NOTION_API_KEY validation at
@@ -452,13 +478,13 @@ async function runPipeline(options = {}) {
 
   let notionWritten = 0;
 
-  for (const { item, scoreResult } of surfacedItems) {
+  for (const { item, scoreResult, contact } of surfacedItems) {
     try {
       let wasWritten;
       if (item.type === 'lead') {
-        wasWritten = await appendLead(buildLeadRecord(item, scoreResult));
+        wasWritten = await appendLead(buildLeadRecord(item, scoreResult, contact));
       } else {
-        wasWritten = await appendOpportunity(buildOpportunityRecord(item, scoreResult));
+        wasWritten = await appendOpportunity(buildOpportunityRecord(item, scoreResult, contact));
       }
       // Treat an explicit `false` from the Notion append functions as "skipped/no-op".
       // Any other value (including `undefined`) is considered a successful write to
